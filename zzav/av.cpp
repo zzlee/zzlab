@@ -318,7 +318,7 @@ namespace zzlab
 			outFormat(AV_SAMPLE_FMT_FLT),
 			mFrameToEnqueue(NULL),
 			mTimer(_WorkerService),
-			mPlaying(false),
+			mPlaying(0),
 			mStopping(false)
 		{
 			ZZLAB_TRACE_THIS();
@@ -446,7 +446,7 @@ namespace zzlab
 
 		void FileMediaPlayer::play(boost::function<void()> endOfStream)
 		{
-			if (mPlaying.exchange(true, memory_order_release) == true)
+			if (mPlaying.exchange(true, memory_order_release) == 1)
 			{
 				ZZLAB_WARN("FileMediaPlayer is PLAYING");
 				return;
@@ -454,7 +454,6 @@ namespace zzlab
 
 			mStopping.store(false, memory_order_release);
 			mEndOfStream = endOfStream;
-			//mDelegate.connect(bind(&FileMediaPlayer::readPacket, this, asio::placeholders::error));
 			readPacket();
 		}
 
@@ -518,7 +517,7 @@ namespace zzlab
 		{
 			if (err || mStopping.load(boost::memory_order_acquire))
 			{
-				mPlaying.store(false, memory_order_release);
+				mPlaying.store(0, memory_order_release);
 				mAfterStop();
 				
 				return;
@@ -540,7 +539,8 @@ namespace zzlab
 			{
 				if (!mDemuxer.read(&mPacket))
 				{
-					handleDelayedFrames(0);
+					mCurrentIndex = 0;
+					handleDelayedFrames();
 					break;
 				}
 
@@ -559,15 +559,16 @@ namespace zzlab
 
 				mTimer.expires_from_now(posix_time::milliseconds(4));
 				mTimer.async_wait(bind(&FileMediaPlayer::readPacket, this, asio::placeholders::error));
+
 				break;
 			}
 		}
 
-		void FileMediaPlayer::handleDelayedFrames(size_t index, boost::system::error_code err)
+		void FileMediaPlayer::handleDelayedFrames(boost::system::error_code err)
 		{
 			if (err || mStopping.load(boost::memory_order_acquire))
 			{
-				mPlaying.store(false, memory_order_release);
+				mPlaying.store(0, memory_order_release);
 				mAfterStop();
 
 				return;
@@ -578,17 +579,19 @@ namespace zzlab
 				if (!mHandler->q.enqueue(mFrameToEnqueue))
 				{
 					mTimer.expires_from_now(posix_time::milliseconds(10));
-					mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this, 
-						index, asio::placeholders::error));
+					mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this, asio::placeholders::error));
 					return;
 				}
 
 				mFrameToEnqueue = NULL;
 			}
 
-			if (index >= mStreamHandlers.size())
+			if (mCurrentIndex >= mStreamHandlers.size())
 			{
-				mPlaying.store(false, memory_order_release);
+				mPlaying.store(-1, memory_order_release);
+				mTimer.expires_from_now(posix_time::seconds(86400)); // wait forever
+				mTimer.async_wait(bind(&FileMediaPlayer::handleAfterEndOfStream, this, asio::placeholders::error));
+
 				mEndOfStream();
 
 				return;
@@ -596,34 +599,47 @@ namespace zzlab
 
 			while (true)
 			{
-				mHandler = mStreamHandlers[index];
+				mHandler = mStreamHandlers[mCurrentIndex];
 				if (mHandler)
 				{
 					mFrameToEnqueue = mHandler->handle(&mPacket, mFrame);
 					if (!mFrameToEnqueue)
 					{
 						// next stream
-						++index;
+						++mCurrentIndex;
 					}
 					else if (mHandler->q.enqueue(mFrameToEnqueue))
 					{
 						mFrameToEnqueue = NULL;
 
 						// next stream
-						++index;
+						++mCurrentIndex;
 					}
 				}
 				else
 				{
 					// next stream
-					++index;
+					++mCurrentIndex;
 				}
 
 				mTimer.expires_from_now(posix_time::milliseconds(4));
-				mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this,
-					index, asio::placeholders::error));
+				mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this, asio::placeholders::error));
 				break;
 			}
+		}
+
+		void FileMediaPlayer::handleAfterEndOfStream(boost::system::error_code err)
+		{
+			if (err || mStopping.load(boost::memory_order_acquire))
+			{
+				mPlaying.store(0, memory_order_release);
+				mAfterStop();
+
+				return;
+			}
+
+			mTimer.expires_from_now(posix_time::seconds(86400)); // wait forever
+			mTimer.async_wait(bind(&FileMediaPlayer::handleAfterEndOfStream, this, asio::placeholders::error));
 		}
 
 		AVSampleFormat cvtSampleFormat(PaSampleFormat fmt)

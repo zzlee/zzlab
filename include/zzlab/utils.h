@@ -109,6 +109,152 @@ namespace zzlab
 		};
 
 		template<class T>
+		class Delegate
+		{
+			explicit Delegate()
+			{
+			}
+
+			explicit Delegate(Delegate& se) : holder(se.holder)
+			{
+			}
+
+			explicit Delegate(const T& t) : holder(new holder_t(t))
+			{
+			}
+
+			void connect(const T& t)
+			{
+				if (holder)
+				{
+					holder_t t(holder);
+
+					t->m.lock();
+					holder.reset(new holder_t(t));
+					t->m.unock();
+				}
+				else
+					holder.reset(new holder_t(t));
+			}
+
+			void cancel()
+			{
+				if (holder)
+				{
+					holder_t t(holder);
+
+					t->m.lock();
+					holder.reset();
+					t->m.unock();
+				}
+				else
+					holder.reset();
+			}
+
+			T operator()()
+			{
+				return T(WeakRef(holder));
+			}
+
+		protected:
+			struct holder_t
+			{
+				boost::mutex m;
+				T f;
+
+				holder_t(const T& t) : f(t)
+				{
+				}
+			};
+			typedef boost::shared_ptr<holder_t> holder_ptr;
+			holder_ptr holder;
+
+			struct WeakRef : public boost::weak_ptr<holder_t>
+			{
+				explicit WeakRef(const holder_ptr& ptr) : boost::weak_ptr<holder_t>(ptr)
+				{
+
+				}
+
+				void operator()()
+				{
+					if (boost::shared_ptr<T> t = lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)();
+					}
+				}
+
+				template<class T1>
+				void operator()(T1 arg1)
+				{
+					if (boost::shared_ptr<T> t = lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1);
+					}
+				}
+
+				template<class T1, class T2>
+				void operator()(T1 arg1, T2 arg2)
+				{
+					if (boost::shared_ptr<T> t = cb.lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1, arg2);
+					}
+				}
+
+				template<class T1, class T2, class T3>
+				void operator()(T1 arg1, T2 arg2, T3 arg3)
+				{
+					if (boost::shared_ptr<T> t = cb.lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1, arg2, arg3);
+					}
+				}
+
+				template<class T1, class T2, class T3, class T4>
+				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
+				{
+					if (boost::shared_ptr<T> t = cb.lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1, arg2, arg3, arg4);
+					}
+				}
+
+				template<class T1, class T2, class T3, class T4, class T5>
+				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
+				{
+					if (boost::shared_ptr<T> t = cb.lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1, arg2, arg3, arg4, arg5);
+					}
+				}
+
+				template<class T1, class T2, class T3, class T4, class T5, class T6>
+				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
+				{
+					if (boost::shared_ptr<T> t = cb.lock())
+					{
+						boost::mutex::scoped_lock l(t->m);
+
+						(*t)(arg1, arg2, arg3, arg4, arg5, arg6);
+					}
+				}
+			};
+		};
+
+		template<class T>
 		class SharedEvent
 		{
 		public:

@@ -9,6 +9,12 @@
 #include "zzlab/d3d9.h"
 
 #include <sstream>
+#include <utility>
+#include <boost/array.hpp>
+#include <boost/format.hpp>
+#include <boost/filesystem.hpp>
+
+#include <wx/listctrl.h>
 
 using namespace boost;
 using namespace zzlab;
@@ -31,45 +37,103 @@ protected:
 
 enum
 {
-	ID_Hello = 1,
-	ID_Close,
+	ID_StopAll = 1,
+
+	ID_Schedule = 0x1000,
 };
 
-class ClearScene
+static cv::Rect loadROI(XmlNode* node)
 {
-public:
-	d3d9::Device* dev;
+	cv::Rect roi;
 
-	explicit ClearScene() : dev(NULL)
+	XmlAttribute* attr = node->first_attribute("position");
+	if (attr)
 	{
-		ZZLAB_TRACE_THIS();
+		std::vector<std::string> tokens;
+		pystring::split(attr->value(), tokens, ",");
+		if (tokens.size() == 2)
+		{
+			roi.x = atoi(tokens[0].c_str());
+			roi.y = atoi(tokens[1].c_str());
+		}
 	}
 
-	virtual ~ClearScene()
+	attr = node->first_attribute("size");
+	if (attr)
 	{
-		ZZLAB_TRACE_THIS();
+		std::vector<std::string> tokens;
+		pystring::split(attr->value(), tokens, ",");
+		if (tokens.size() == 2)
+		{
+			roi.width = atoi(tokens[0].c_str());
+			roi.height = atoi(tokens[1].c_str());
+		}
 	}
 
-	void init()
+	return roi;
+}
+
+static void getROI_YUV420P(AVFrame* src, AVFrame* dst, const cv::Rect& roi)
+{
+	dst->width = roi.width;
+	dst->height = roi.height;
+	dst->data[0] = src->data[0] + roi.x + roi.y * src->linesize[0];
+	dst->data[1] = src->data[1] + roi.x / 2 + roi.y / 2 * src->linesize[1];
+	dst->data[2] = src->data[2] + roi.x / 2 + roi.y / 2 * src->linesize[2];
+	dst->linesize[0] = src->linesize[0];
+	dst->linesize[1] = src->linesize[1];
+	dst->linesize[2] = src->linesize[2];
+}
+
+struct FileNameMapping : public boost::unordered_map<std::string, boost::filesystem::wpath>
+{
+	void load(XmlNode* node)
 	{
-		mDrawDelegate.connect(bind(&ClearScene::draw, this));
+		filesystem::wpath root = _AssetsPath / "Videos";
 
-		dev->rendererEvents.waitForDraw(mDrawDelegate(), gfx::RendererEvents::LAYER_0);
-	}
-
-protected:
-	utils::SharedEvent0 mDrawDelegate;
-
-	void draw()
-	{
-		//ZZLAB_TRACE_THIS();
-
-		HR(dev->dev->Clear(0, NULL,
-			D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0));
-
-		dev->rendererEvents.waitForDraw(mDrawDelegate());
+		for (XmlNode* file = node->first_node("File"); file; file = file->next_sibling("File"))
+		{
+			insert(value_type(file->first_attribute("name")->value(),
+				root / file->first_attribute("dst")->value()));
+		}
 	}
 };
+FileNameMapping _FileNameMapping;
+
+struct Cut {
+	size_t id;
+	std::string A;
+	std::string A_ending;
+	std::string B;
+	std::string C;
+	std::string BC_ending;
+	std::string fadeOut;
+
+	void load(XmlNode* node)
+	{
+		A = node->first_attribute("A")->value();
+		A_ending = node->first_attribute("A-ending")->value();
+		B = node->first_attribute("B")->value();
+		C = node->first_attribute("C")->value();
+		BC_ending = node->first_attribute("BC-ending")->value();
+		fadeOut = node->first_attribute("fade-out")->value();
+	}
+};
+
+struct Schedule : public std::vector<Cut>
+{
+	void load(XmlNode* node)
+	{
+		size_t id = 0;
+		for (XmlNode* cut = node->first_node("Cut"); cut; cut = cut->next_sibling("Cut"))
+		{
+			push_back(Cut());
+			back().id = id++;
+			back().load(cut);
+		}
+	}
+};
+Schedule _Schedule;
 
 class VideoQuadRenderer
 {
@@ -174,6 +238,8 @@ protected:
 	}
 };
 
+static void dummy() {}
+
 class MyFrame : public wxFrame
 {
 public:
@@ -181,65 +247,98 @@ public:
 		wxFrame(NULL, wxID_ANY, title, pos, size)
 	{
 		wxMenu *menuFile = new wxMenu;
-		menuFile->Append(ID_Hello, "&Hello...\tCtrl-H",
-			"Help string shown in status bar for this menu item");
-		menuFile->AppendSeparator();
+		menuFile->Append(ID_StopAll, "&Stop all\tCtrl-S");
+		menuFile->Append(wxID_SEPARATOR);
 		menuFile->Append(wxID_EXIT);
-		wxMenu *menuHelp = new wxMenu;
-		menuHelp->Append(wxID_ABOUT);
+
 		wxMenuBar *menuBar = new wxMenuBar;
 		menuBar->Append(menuFile, "&File");
-		menuBar->Append(menuHelp, "&Help");
 		SetMenuBar(menuBar);
 		CreateStatusBar();
-		SetStatusText("Welcome to wxWidgets!");
 
-		mDevice0 = createDevice(_Settings.first_node("Window0"));
-		mDevice1 = createDevice(_Settings.first_node("Window1"));
-		mDevice2 = createDevice(_Settings.first_node("Window2"));
-		mDevice3 = createDevice(_Settings.first_node("Window3"));
-		mDevice4 = createDevice(_Settings.first_node("Window4"));
-		
-		mClearScene0 = new ClearScene();
-		mClearScene0->dev = mDevice0;
-		mClearScene0->init();
+		wxListView* scheList = new wxListView(this, ID_Schedule, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
+		scheList->AppendColumn(L"Cut");
+		scheList->AppendColumn(L"A");
+		scheList->AppendColumn(L"A結束動作");
+		scheList->AppendColumn(L"B");
+		scheList->AppendColumn(L"C");
+		scheList->AppendColumn(L"BC結束動作");
+		scheList->AppendColumn(L"淡出");
 
-		mMediaPlayer = NULL;
+		for (size_t i = 0; i < _Schedule.size();++i)
+		{
+			const Cut& cut = _Schedule[i];
+			scheList->InsertItem(i, (format("%d") % i).str());
+			scheList->SetItem(i, 1, cut.A);
+			scheList->SetItem(i, 2, cut.A_ending);
+			scheList->SetItem(i, 3, cut.B);
+			scheList->SetItem(i, 4, cut.C);
+			scheList->SetItem(i, 5, cut.BC_ending);
+			scheList->SetItem(i, 6, cut.fadeOut);
+		}
 
-		mQuad0 = NULL;
-		mVideoTexture0 = NULL;
+		mScheduleList = scheList;
 
-		mQuad1 = NULL;
-		mVideoTexture1 = NULL;
+		for (size_t i = 0; i < mDevices.size(); ++i)
+		{
+			mDevices[i] = createDevice(_Settings.first_node(
+				(boost::format("Window%d") % i).str().c_str()));
+
+			mClearScenes[i] = new d3d9::ClearScene();
+			mClearScenes[i]->dev = mDevices[i]->dev;
+			mClearScenes[i]->rendererEvents = &mDevices[i]->rendererEvents;
+			mClearScenes[i]->init();
+		}
+
+		std::fill(mMediaPlayers.begin(), mMediaPlayers.end(), nullptr);
+
+		std::fill(mQuads.begin(), mQuads.end(), nullptr);
+		std::fill(mVideoTextures.begin(), mVideoTextures.end(), nullptr);
+
+		for (size_t i = 0; i < mVideoROIs.size(); ++i)
+		{
+			mVideoROIs[i] = loadROI(_Settings.first_node(
+				(boost::format("VideoROI%d") % i).str().c_str()));
+
+			mLiveROIs[i] = loadROI(_Settings.first_node(
+				(boost::format("LiveROI%d") % i).str().c_str()));
+		}
+
+		mState = State_Ready;
+		mCurrentCut = NULL;
+		mAfterStop = bind(dummy);
 	}
 
 	~MyFrame()
 	{
-		delete mDevice0;
-		delete mDevice1;
-		delete mDevice2;
-		delete mDevice3;
-		delete mDevice4;
-
-		delete mClearScene0;
+		for (size_t i = 0; i < mDevices.size(); ++i)
+		{
+			delete mDevices[i];
+			delete mClearScenes[i];
+		}
 	}
 
-private:
-	d3d9::Device* mDevice0;
-	d3d9::Device* mDevice1;
-	d3d9::Device* mDevice2;
-	d3d9::Device* mDevice3;
-	d3d9::Device* mDevice4;
+protected:
+	enum State
+	{
+		State_Ready,
+		State_Playing,
+		State_Stopping
+	} mState;
 
-	ClearScene* mClearScene0;
+	wxListView* mScheduleList;
 
-	av::SimpleMediaPlayer* mMediaPlayer;
+	Cut* mCurrentCut;
 
-	VideoQuadRenderer* mQuad0;
-	d3d9::DynamicYV12TextureResource* mVideoTexture0;
+	boost::array<d3d9::Device*, 5> mDevices;
+	boost::array<d3d9::ClearScene*, 5> mClearScenes;
 
-	VideoQuadRenderer* mQuad1;
-	d3d9::DynamicYV12TextureResource* mVideoTexture1;
+	boost::array<av::SimpleMediaPlayer*, 3> mMediaPlayers;
+
+	boost::array<VideoQuadRenderer*, 7> mQuads;
+	boost::array<d3d9::DynamicYV12TextureResource*, 7> mVideoTextures;
+	boost::array<cv::Rect, 7> mVideoROIs;
+	boost::array<cv::Rect, 7> mLiveROIs;
 
 	d3d9::Device* createDevice(XmlNode* node)
 	{
@@ -280,99 +379,220 @@ private:
 		return dev;
 	}
 
-	void endOfStream()
+	void OnItemActivated(wxListEvent& event)
 	{
-		ZZLAB_TRACE("END OF STREAM");
-	}
+		//ZZLAB_TRACE_THIS();
 
-	void handleStop()
-	{
-		if (mMediaPlayer)
-		{
-			delete mMediaPlayer;
-			mMediaPlayer = NULL;
-		}
+		const wxListItem& item = event.GetItem();
 
-		if (mQuad0)
-		{
-			delete mQuad0;
-			mQuad0 = NULL;
-		}
+		ZZLAB_TRACE("Item " << item.GetId() << " is about to play...");
 
-		if (mVideoTexture0)
+		switch (mState)
 		{
-			delete mVideoTexture0;
-			mVideoTexture0 = NULL;
-		}
+		case State_Ready:
+			// TODO: fade-out-effect
+			play(item.GetId());
+			break;
 
-		if (mQuad1)
-		{
-			delete mQuad1;
-			mQuad1 = NULL;
-		}
-
-		if (mVideoTexture1)
-		{
-			delete mVideoTexture1;
-			mVideoTexture1 = NULL;
+		case State_Playing:
+			if (item.GetId() == mCurrentCut->id)
+				ZZLAB_TRACE("Item " << item.GetId() << " is already playing.");
+			else
+				stopAll(bind(&MyFrame::play, this, item.GetId()));
+			break;
 		}
 	}
 
-	void OnHello(wxCommandEvent& event)
+	void play(size_t idx)
 	{
-		if (mMediaPlayer)
-		{
-			mMediaPlayer->stop(bind(&MyFrame::handleStop, this));
-			return;
-		}
+		for (size_t i = 0; i < mScheduleList->GetItemCount(); ++i)
+			mScheduleList->SetItemBackgroundColour(i, wxColour(255, 255, 255));
 
-		mMediaPlayer = new av::SimpleMediaPlayer();
-		mMediaPlayer->source = _AssetsPath / "Videos" / "main-video.mp4";
-		mMediaPlayer->timeSource = _Timer;
-		mMediaPlayer->audioDevice = _AudioDevice;
-		mMediaPlayer->load(_Settings.first_node("MediaPlayer0"));
-		mMediaPlayer->init();
+		mScheduleList->SetItemBackgroundColour(idx, wxColour(255, 0, 0));
+		mScheduleList->SetItemState(idx, 0, wxLIST_STATE_SELECTED);
 
-		AVCodecContext* ctx = mMediaPlayer->getVideoCodecContext();
-		if (ctx)
-		{
-			mVideoTexture0 = new d3d9::DynamicYV12TextureResource();
-			mVideoTexture0->dev = mDevice0->dev;
-			mVideoTexture0->width = ctx->width;
-			mVideoTexture0->height = ctx->height;
-			mVideoTexture0->deviceResourceEvents = &mDevice0->deviceResourceEvents;
-			mVideoTexture0->init();
-			
-			mQuad0 = new VideoQuadRenderer();
-			mQuad0->dev = mDevice0;
-			mQuad0->videoTexture = mVideoTexture0;
-			mQuad0->load(_Settings.first_node("Quad0"));
-			mQuad0->init();
+		mCurrentCut = &_Schedule[idx];
 
-			mVideoTexture1 = new d3d9::DynamicYV12TextureResource();
-			mVideoTexture1->dev = mDevice0->dev;
-			mVideoTexture1->width = ctx->width;
-			mVideoTexture1->height = ctx->height;
-			mVideoTexture1->deviceResourceEvents = &mDevice0->deviceResourceEvents;
-			mVideoTexture1->init();
+		int64_t playTime = _Timer->getTime();
+		play0(_FileNameMapping[mCurrentCut->A], playTime);
+		play1(_FileNameMapping[mCurrentCut->B], playTime);
+		play2(_FileNameMapping[mCurrentCut->C], playTime);
 
-			mQuad1 = new VideoQuadRenderer();
-			mQuad1->dev = mDevice0;
-			mQuad1->videoTexture = mVideoTexture1;
-			mQuad1->load(_Settings.first_node("Quad1"));
-			mQuad1->init();
-
-			mMediaPlayer->getVideoRenderer()->rendererEvents = &mDevice0->rendererEvents;
-			mMediaPlayer->getVideoRenderer()->renderFrame = bind(&MyFrame::renderFrame, this, _1);
-		}
-
-		mMediaPlayer->play(_Timer->getTime(), _MainService.wrap(bind(&MyFrame::endOfStream, this)));
+		mState = State_Playing;
 	}
 
-	void renderFrame(AVFrame* frame)
+	void endOfStream(size_t idx)
 	{
-		mVideoTexture0->update(frame);
-		mVideoTexture1->update(frame);
+		ZZLAB_TRACE("END OF STREAM, " << idx);
+	}
+
+	void handleStop(size_t idx)
+	{
+		if (mMediaPlayers[idx])
+		{
+			delete mMediaPlayers[idx];
+			mMediaPlayers[idx] = NULL;
+		}
+
+		for (size_t i = 0;i < mMediaPlayers.size(); ++i)
+		{
+			if (mMediaPlayers[i])
+				return;
+		}
+
+		ZZLAB_INFO("All media players are stopped now.");
+
+		for (size_t i = 0; i < mQuads.size(); ++i)
+		{
+			if (mQuads[i])
+			{
+				delete mQuads[i];
+				mQuads[i] = NULL;
+			}
+		}
+
+		for (size_t i = 0; i < mVideoTextures.size(); ++i)
+		{
+			if (mVideoTextures[i])
+			{
+				delete mVideoTextures[i];
+				mVideoTextures[i] = NULL;
+			}
+		}
+
+		ZZLAB_TRACE_VALUE(mCurrentCut->fadeOut);
+
+		mCurrentCut = NULL;
+		mState = State_Ready;
+		mAfterStop();
+		mAfterStop = bind(dummy);
+	}
+
+	void stopMediaPlayer(size_t idx)
+	{
+		mMediaPlayers[idx]->stop(_MainService.wrap(bind(&MyFrame::handleStop, this, idx)));
+	}
+
+	function<void()> mAfterStop;
+	void stopAll(function<void()> afterStop)
+	{
+		mAfterStop = afterStop;
+		mState = State_Stopping;
+
+		stopMediaPlayer(0);
+		stopMediaPlayer(1);
+		stopMediaPlayer(2);
+	}
+	
+	void initQuad(size_t device_index, size_t quad_index)
+	{
+		d3d9::Device* device = mDevices[device_index];
+		const cv::Rect& roi = mVideoROIs[quad_index];
+
+		d3d9::DynamicYV12TextureResource* texture = new d3d9::DynamicYV12TextureResource();
+		texture->dev = device->dev;
+		texture->width = roi.width;
+		texture->height = roi.height;
+		texture->deviceResourceEvents = &device->deviceResourceEvents;
+		texture->init();
+		texture->set(d3d9::ScalarYUV(0, 128, 128));
+
+		VideoQuadRenderer* quad = new VideoQuadRenderer();
+		quad->dev = device;
+		quad->videoTexture = texture;
+		quad->load(_Settings.first_node((format("Quad%d") % quad_index).str().c_str()));
+		quad->init();
+
+		mVideoTextures[quad_index] = texture;
+		mQuads[quad_index] = quad;
+	}
+
+	void initMediaPlayer(size_t mp_index, boost::filesystem::wpath path, int64_t playTime)
+	{
+		av::SimpleMediaPlayer* mp = new av::SimpleMediaPlayer();
+		mp->source = path;
+		mp->timeSource = _Timer;
+		mp->audioDevice = _AudioDevice;
+		mp->load(_Settings.first_node("MediaPlayer0"));
+		mp->init();
+
+		mp->getVideoRenderer()->rendererEvents = &mDevices[0]->rendererEvents;
+		mp->getVideoRenderer()->renderFrame = bind(&MyFrame::renderFrame, this, _1, mp_index);
+
+		mp->play(playTime, _MainService.wrap(bind(&MyFrame::endOfStream, this, mp_index)));
+
+		mMediaPlayers[mp_index] = mp;
+	}
+
+	void updateTexture(AVFrame* frame, size_t idx)
+	{
+		AVFrame tmp;
+
+		getROI_YUV420P(frame, &tmp, mVideoROIs[idx]);
+		mVideoTextures[idx]->update(&tmp);
+	}
+
+	void renderFrame(AVFrame* frame, size_t idx)
+	{
+		switch (idx)
+		{
+		case 0:
+			updateTexture(frame, 0);
+			updateTexture(frame, 1);
+			break;
+
+		case 1:
+			updateTexture(frame, 2);
+			updateTexture(frame, 3);
+			updateTexture(frame, 4);
+			break;
+
+		case 2:
+			updateTexture(frame, 5);
+			updateTexture(frame, 6);
+			break;
+		}
+	}
+
+	void play0(boost::filesystem::wpath path, int64_t playTime)
+	{
+		if (path.filename() == "LIVE")
+		{
+			// TODO: LIVE stream
+		}
+		else
+		{
+			initQuad(0, 0);
+			initQuad(0, 1);
+
+			// create media player
+			initMediaPlayer(0, path, playTime);
+		}
+	}
+
+	void play1(boost::filesystem::wpath path, int64_t playTime)
+	{
+		initQuad(1, 2);
+		initQuad(2, 3);
+		initQuad(3, 4);
+
+		// create media player
+		initMediaPlayer(1, path, playTime);
+	}
+
+	void play2(boost::filesystem::wpath path, int64_t playTime)
+	{
+		// renderer for device 2
+		initQuad(4, 5);
+		initQuad(4, 6);
+
+		// create media player
+		initMediaPlayer(2, path, playTime);
+	}
+
+	void OnStopAll(wxCommandEvent& event)
+	{
+		stopAll(bind(dummy));
 	}
 
 	void OnExit(wxCommandEvent& event)
@@ -380,24 +600,16 @@ private:
 		Close();
 	}
 
-	void OnAbout(wxCommandEvent& event)
-	{
-		wxMessageBox("This is a wxWidgets' Hello world sample",
-			"About Hello World", wxOK | wxICON_INFORMATION);
-	}
-
 	void OnClose(wxCloseEvent& event)
 	{
-		if (mMediaPlayer)
-			mMediaPlayer->stop(bind(&MyFrame::handleClose, this));
+		if (mState == State_Playing)
+			stopAll(bind(&MyFrame::shutdown, this));
 		else
-			handleClose();
+			shutdown();
 	}
 
-	void handleClose()
+	void shutdown()
 	{
-		handleStop();
-
 		utils::stopAllServices();
 
 		Destroy();
@@ -407,10 +619,10 @@ private:
 };
 
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
-EVT_MENU(ID_Hello, MyFrame::OnHello)
+EVT_MENU(ID_StopAll, MyFrame::OnStopAll)
 EVT_MENU(wxID_EXIT, MyFrame::OnExit)
-EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
 EVT_CLOSE(MyFrame::OnClose)
+EVT_LIST_ITEM_ACTIVATED(ID_Schedule, MyFrame::OnItemActivated)
 wxEND_EVENT_TABLE()
 
 wxIMPLEMENT_APP(MyApp);
@@ -442,7 +654,10 @@ bool MyApp::OnInit()
 	_AudioDevice->init();
 	_AudioDevice->start();
 
-	MyFrame *frame = new MyFrame("Hello World", wxPoint(50, 50), wxSize(450, 340));
+	_FileNameMapping.load(_Settings.first_node("FileNameMapping"));
+	_Schedule.load(_Settings.first_node("Schedule"));
+
+	MyFrame *frame = new MyFrame("Show Control", wxPoint(0, 0), wxSize(650, 440));
 	frame->Show(true);
 
 	return true;

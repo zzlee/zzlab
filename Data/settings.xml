@@ -41,9 +41,67 @@
 	audio-queue-size="64"
 	audio-drop-tolerance="2"/>
 
-<Quad0 position="0,0" size="640,360"/>
-<Quad1 position="640,360" size="640,360"/>
+<Quad0 position="0,0" size="640,480"/>
+<VideoROI0 position="0,0" size="640,480" />
+<LiveROI0 position="0,0" size="640,480" />
 
-<VideoMapping0 position="0,0" size="640,480" />
+<Quad1 position="640,0" size="640,480"/>
+<VideoROI1 position="0,0" size="640,480" />
+<LiveROI1 position="0,0" size="640,480" />
 
-<Live0 position="0,0" size="640,480" />
+<Quad2 position="0,0" size="640,480"/>
+<VideoROI2 position="0,0" size="640,480" />
+<LiveROI2 position="0,0" size="640,480" />
+
+<Quad3 position="0,0" size="640,480"/>
+<VideoROI3 position="0,0" size="640,480" />
+<LiveROI3 position="0,0" size="640,480" />
+
+<Quad4 position="0,0" size="640,480"/>
+<VideoROI4 position="0,0" size="640,480" />
+<LiveROI4 position="0,0" size="640,480" />
+
+<Quad5 position="0,0" size="640,480"/>
+<VideoROI5 position="0,0" size="640,480" />
+<LiveROI5 position="0,0" size="640,480" />
+
+<Quad6 position="640,0" size="640,480"/>
+<VideoROI6 position="0,0" size="640,480" />
+<LiveROI6 position="0,0" size="640,480" />
+
+<FileNameMapping>
+	<File name="01" dst="LIVE"/>
+	<File name="02" dst="0824YiLan-2.mp4"/>
+	<File name="03" dst="0824YiLan-2.mp4"/>
+	<File name="04" dst="0824YiLan-2.mp4"/>
+	<File name="05" dst="0824YiLan-2.mp4"/>
+	<File name="06" dst="0824YiLan-2.mp4"/>
+
+	<File name="b1" dst="main-video.avi"/>
+	<File name="b2" dst="main-video.avi"/>
+	<File name="b3" dst="main-video.avi"/>
+	<File name="b4" dst="main-video.avi"/>
+	<File name="b5" dst="main-video.avi"/>
+
+	<File name="c1" dst="main-video.avi"/>
+	<File name="c2" dst="main-video.avi"/>
+	<File name="c3" dst="main-video.avi"/>
+	<File name="c4" dst="main-video.avi"/>
+	<File name="c5" dst="main-video.avi"/>
+</FileNameMapping>
+
+<Schedule>
+	<Cut A="02" A-ending="loop" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+	<Cut A="03" A-ending="stop" B="b1" C="c1" BC-ending="loop" fade-out="1"/>
+	<Cut A="02" A-ending="loop" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+	<Cut A="04" A-ending="stop" B="b2" C="c2" BC-ending="stop" fade-out="0"/>
+	<Cut A="01" A-ending="na" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+	<Cut A="02" A-ending="loop" B="b1" C="c1" BC-ending="loop" fade-out="1"/>
+	<Cut A="05" A-ending="stop" B="b3" C="c3" BC-ending="stop" fade-out="0"/>
+	<Cut A="01" A-ending="na" B="b4" C="c4" BC-ending="loop" fade-out="0"/>
+	<Cut A="01" A-ending="na" B="b5" C="c5" BC-ending="loop" fade-out="0"/>
+	<Cut A="01" A-ending="na" B="b4" C="c4" BC-ending="loop" fade-out="0"/>
+	<Cut A="02" A-ending="loop" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+	<Cut A="06" A-ending="stop" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+	<Cut A="02" A-ending="loop" B="b1" C="c1" BC-ending="loop" fade-out="0"/>
+</Schedule>

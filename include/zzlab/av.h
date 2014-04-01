@@ -27,6 +27,9 @@ extern "C" {
 #include <opencv2/opencv.hpp>
 #include <portaudio.h>
 
+#include <comdef.h>
+#include <dshow.h>
+
 namespace zzlab
 {
 	namespace av
@@ -270,7 +273,12 @@ namespace zzlab
 
 			bool isPlaying() const
 			{
-				return mPlaying.load(boost::memory_order_acquire);
+				return mPlaying.load(boost::memory_order_acquire) != 0;
+			}
+
+			bool isEndOfStream()
+			{
+				return mPlaying.load(boost::memory_order_acquire) == -1;
 			}
 
 			size_t getStreams() const
@@ -297,7 +305,7 @@ namespace zzlab
 			zzlab::av::FileDemuxer mDemuxer;
 			AVPacket mPacket;
 			AVFrame* mFrame;
-			boost::atomic<bool> mPlaying;
+			boost::atomic<int> mPlaying;
 
 			boost::function<void()> mEndOfStream;
 			boost::function<void()> mAfterStop;
@@ -330,10 +338,11 @@ namespace zzlab
 			AVFrame* mFrameToEnqueue;
 			StreamHandler* mHandler;
 
-			//utils::SharedEvent< boost::function<void(boost::system::error_code)> > mDelegate;
-
 			void readPacket(boost::system::error_code err = boost::system::error_code());
-			void handleDelayedFrames(size_t index, boost::system::error_code err = boost::system::error_code());
+
+			size_t mCurrentIndex;
+			void handleDelayedFrames(boost::system::error_code err = boost::system::error_code());
+			void handleAfterEndOfStream(boost::system::error_code err = boost::system::error_code());
 		};
 
 		class ZZAV_API NullRenderer

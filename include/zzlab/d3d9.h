@@ -47,6 +47,7 @@ namespace zzlab
 		typedef boost::tuple<IDirect3DTexture9Ptr, IDirect3DTexture9Ptr> DynamicTexture;
 		typedef boost::tuple<DynamicTexture, DynamicTexture, DynamicTexture> YUVTexture;
 		typedef boost::tuple<cv::Mat1b, cv::Mat1b, cv::Mat1b> MatYUV;
+		typedef boost::tuple<uint8_t, uint8_t, uint8_t> ScalarYUV;
 
 		struct AdapterInfo
 		{
@@ -70,6 +71,7 @@ namespace zzlab
 			D3DPRESENT_PARAMETERS *pPresentationParameters,
 			D3DDISPLAYMODEEX *pFullscreenDisplayMode
 			);
+
 		ZZD3D9_API IDirect3DVertexBuffer9Ptr createVertexBuffer(
 			LPDIRECT3DDEVICE9 pDevice,
 			UINT Length,
@@ -78,10 +80,12 @@ namespace zzlab
 			D3DPOOL Pool = D3DPOOL_DEFAULT,
 			HANDLE *pSharedHandle = NULL
 			);
+
 		ZZD3D9_API IDirect3DVertexDeclaration9Ptr createVertexDeclaration(
 			LPDIRECT3DDEVICE9 pDevice,
 			const D3DVERTEXELEMENT9 *pVertexElements
 			);
+
 		ZZD3D9_API IDirect3DTexture9Ptr createTexture(
 			LPDIRECT3DDEVICE9 pDevice,
 			UINT Width,
@@ -92,6 +96,7 @@ namespace zzlab
 			D3DPOOL Pool = D3DPOOL_DEFAULT,
 			HANDLE *pSharedHandle = NULL
 			);
+
 		ZZD3D9_API IDirect3DIndexBuffer9Ptr createIndexBuffer(
 			LPDIRECT3DDEVICE9 pDevice,
 			UINT Length,
@@ -100,6 +105,7 @@ namespace zzlab
 			D3DPOOL Pool = D3DPOOL_DEFAULT,
 			HANDLE *pSharedHandle = NULL
 			);
+
 		ZZD3D9_API ID3DXEffectPtr createEffectFromFile(
 			LPDIRECT3DDEVICE9 pDevice,
 			LPCWSTR pSrcFile,
@@ -108,25 +114,36 @@ namespace zzlab
 			DWORD Flags = 0,
 			LPD3DXEFFECTPOOL pPool = NULL
 			);
+
 		ZZD3D9_API ID3DXFontPtr createFontIndirect(
 			LPDIRECT3DDEVICE9 pDevice,
 			const D3DXFONT_DESC *pDesc
 			);
+
 		ZZD3D9_API IDirect3DTexture9Ptr createTextureFromFile(
 			LPDIRECT3DDEVICE9 pDevice,
 			LPCWSTR pSrcFile
 			);
+
 		ZZD3D9_API boost::tuple<ID3DXMeshPtr, ID3DXBufferPtr, ID3DXBufferPtr, DWORD>
 			loadMeshFromX(
 			LPDIRECT3DDEVICE9 pD3DDevice,
 			LPCWSTR pSrcFile,
 			DWORD Options = D3DXMESH_MANAGED
 			);
+
 		ZZD3D9_API void updateTexture(
 			LPDIRECT3DTEXTURE9 pTexture,
 			cv::Mat src,
 			UINT Level = 0
 			);
+
+		ZZD3D9_API void updateTexture(
+			LPDIRECT3DTEXTURE9 pTexture,
+			cv::Scalar src,
+			UINT Level = 0
+			);
+
 		ZZD3D9_API DynamicTexture createDynamicTexture(
 			LPDIRECT3DDEVICE9 pDevice,
 			UINT Width,
@@ -137,6 +154,11 @@ namespace zzlab
 			LPDIRECT3DDEVICE9 pDevice,
 			const DynamicTexture &tex,
 			cv::Mat src
+			);
+		ZZD3D9_API void updateDynamicTexture(
+			LPDIRECT3DDEVICE9 pDevice,
+			const DynamicTexture &tex,
+			cv::Scalar src
 			);
 
 		inline YUVTexture createYV12Texture(
@@ -155,6 +177,17 @@ namespace zzlab
 			LPDIRECT3DDEVICE9 pDevice,
 			const YUVTexture &tex,
 			MatYUV yuv
+			)
+		{
+			updateDynamicTexture(pDevice, tex.get<0>(), yuv.get<0>());
+			updateDynamicTexture(pDevice, tex.get<1>(), yuv.get<1>());
+			updateDynamicTexture(pDevice, tex.get<2>(), yuv.get<2>());
+		}
+
+		inline void updateYUVTexture(
+			LPDIRECT3DDEVICE9 pDevice,
+			const YUVTexture &tex,
+			ScalarYUV yuv
 			)
 		{
 			updateDynamicTexture(pDevice, tex.get<0>(), yuv.get<0>());
@@ -287,6 +320,11 @@ namespace zzlab
 			void init();
 			void update(AVFrame* frame);
 
+			void set(const ScalarYUV& yuv)
+			{
+				updateYUVTexture(dev, texture, yuv);
+			}
+
 		protected:
 			utils::SharedEvent0 mEvent0;
 			boost::asio::coroutine __coro_main;
@@ -346,6 +384,28 @@ namespace zzlab
 
 		protected:
 			virtual void initResources();
+		};
+
+		class ZZD3D9_API ClearScene
+		{
+		public:
+			IDirect3DDevice9ExPtr dev;
+			gfx::RendererEvents* rendererEvents;
+
+			DWORD flags;
+			D3DCOLOR color;
+			float Z;
+			DWORD stencil;
+
+			explicit ClearScene();
+			virtual ~ClearScene();
+
+			void init();
+
+		protected:
+			utils::SharedEvent0 mDrawDelegate;
+
+			void draw();
 		};
 
 	} // namespace d3d9

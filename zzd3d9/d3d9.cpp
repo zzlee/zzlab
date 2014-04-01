@@ -298,7 +298,6 @@ namespace zzlab
 				);
 		}
 
-
 		void updateTexture(
 			LPDIRECT3DTEXTURE9 pTexture,
 			cv::Mat src,
@@ -309,6 +308,58 @@ namespace zzlab
 			HR(pTexture->LockRect(Level, &rect, NULL, D3DLOCK_DISCARD));
 
 			src.copyTo(cv::Mat(src.size(), src.type(), (uint8_t *)rect.pBits, rect.Pitch));
+
+			pTexture->UnlockRect(Level);
+		}
+
+		void updateTexture(
+			LPDIRECT3DTEXTURE9 pTexture,
+			cv::Scalar src,
+			UINT Level
+			)
+		{
+			D3DSURFACE_DESC desc;
+			HR(pTexture->GetLevelDesc(Level, &desc));
+
+			D3DLOCKED_RECT rect;
+			HR(pTexture->LockRect(Level, &rect, NULL, D3DLOCK_DISCARD));
+
+			switch (desc.Format)
+			{
+			case D3DFMT_R8G8B8:
+				cv::Mat3b(desc.Height, desc.Width,
+					(cv::Vec3b *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+
+			case D3DFMT_A8R8G8B8:
+			case D3DFMT_X8R8G8B8:
+			case D3DFMT_A8B8G8R8:
+			case D3DFMT_X8B8G8R8:
+				cv::Mat4b(desc.Height, desc.Width,
+					(cv::Vec4b *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+
+			case D3DFMT_A8:
+			case D3DFMT_L8:
+				cv::Mat1b(desc.Height, desc.Width,
+					(uint8_t *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+
+			case D3DFMT_G16R16:
+				cv::Mat2s(desc.Height, desc.Width,
+					(cv::Vec2s *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+
+			case D3DFMT_D16:
+				cv::Mat1s(desc.Height, desc.Width,
+					(short *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+
+			case D3DFMT_D32:
+				cv::Mat1i(desc.Height, desc.Width,
+					(int *)rect.pBits, rect.Pitch).setTo(src);
+				break;
+			}
 
 			pTexture->UnlockRect(Level);
 		}
@@ -329,6 +380,16 @@ namespace zzlab
 			LPDIRECT3DDEVICE9 pDevice,
 			const DynamicTexture &tex,
 			cv::Mat src
+			)
+		{
+			updateTexture(tex.get<0>(), src);
+			pDevice->UpdateTexture(tex.get<0>(), tex.get<1>());
+		}
+
+		void updateDynamicTexture(
+			LPDIRECT3DDEVICE9 pDevice,
+			const DynamicTexture &tex,
+			cv::Scalar src
 			)
 		{
 			updateTexture(tex.get<0>(), src);
@@ -1028,6 +1089,36 @@ namespace zzlab
 			HR(dev->SetIndices(indexBuffer));
 
 			drawQuad(dev, effect);
+		}
+
+		ClearScene::ClearScene() :
+			dev(NULL),
+			rendererEvents(NULL),
+			flags(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER),
+			color(D3DCOLOR_XRGB(0, 0, 0)),
+			Z(1.0f),
+			stencil(0.0f)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		ClearScene::~ClearScene()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void ClearScene::init()
+		{
+			mDrawDelegate.connect(bind(&ClearScene::draw, this));
+			rendererEvents->waitForDraw(mDrawDelegate(), gfx::RendererEvents::LAYER_0);
+		}
+
+		void ClearScene::draw()
+		{
+			//ZZLAB_TRACE_THIS();
+
+			HR(dev->Clear(0, NULL, flags, color, Z, stencil));
+			rendererEvents->waitForDraw(mDrawDelegate());
 		}
 
 	} // namespace d3d9
