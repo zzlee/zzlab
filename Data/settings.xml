@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<audio0 sample-rate="44100">
+	<!-- <input/> -->
+	<output channel-count="2"/>
+</audio0>
+
+<d3ddev 
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	multi-sample-type="D3DMULTISAMPLE_NONE"
+	multi-sample-quality="0"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D16"
+	flags="D3DSWAPEFFECT_DISCARD"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"
+	do-not-wait="true"
+	rate="120.0"/>
+
+<Window0 title="Window 0" position="1366,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window1 title="Window 1" position="1366,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window2 title="Window 2" position="2006,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window3 title="Window 3" position="2646,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window4 title="Window 4" position="2006,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+
+<!-- <Window0 title="Window 0" position="0,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window1 title="Window 1" position="0,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window2 title="Window 2" position="455,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window3 title="Window 3" position="910,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window4 title="Window 4" position="455,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+ -->
+<MediaPlayer0
+	video-decoder-threads="1"
+	video-queue-size="64"
+	video-drop-tolerance="2"
+	audio-queue-size="64"
+	audio-drop-tolerance="2"/>
+
+<Quad0 position="0,0" size="640,360"/>
+<Quad1 position="640,360" size="640,360"/>
+
+<VideoMapping0 position="0,0" size="640,480" />
+
+<Live0 position="0,0" size="640,480" />
