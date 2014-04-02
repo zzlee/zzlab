@@ -41,13 +41,19 @@
 	audio-queue-size="64"
 	audio-drop-tolerance="2"/>
 
+<VideoCap0
+	index="0"
+	width="640"
+	height="480"
+	null-sync-source="true"/>
+
 <Quad0 position="0,0" size="640,480"/>
 <VideoROI0 position="0,0" size="640,480" />
-<LiveROI0 position="0,0" size="640,480" />
+<LiveROI0 position="0,0" size="0,0" />
 
 <Quad1 position="640,0" size="640,480"/>
 <VideoROI1 position="0,0" size="640,480" />
-<LiveROI1 position="0,0" size="640,480" />
+<LiveROI1 position="0,0" size="0,0" />
 
 <Quad2 position="0,0" size="640,480"/>
 <VideoROI2 position="0,0" size="640,480" />
@@ -63,11 +69,11 @@
 
 <Quad5 position="0,0" size="640,480"/>
 <VideoROI5 position="0,0" size="640,480" />
-<LiveROI5 position="0,0" size="640,480" />
+<LiveROI5 position="0,0" size="0,0" />
 
 <Quad6 position="640,0" size="640,480"/>
 <VideoROI6 position="0,0" size="640,480" />
-<LiveROI6 position="0,0" size="640,480" />
+<LiveROI6 position="0,0" size="0,0" />
 
 <FileNameMapping>
 	<File name="01" dst="LIVE"/>

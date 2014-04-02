@@ -9,10 +9,17 @@
 
 #include "zzlab.h"
 
+extern "C"
+{
 #include <libavutil/rational.h>
+}
+
+#include <queue>
+
 #include <boost/thread/mutex.hpp>
 #include <boost/asio/deadline_timer.hpp>
-#include <queue>
+
+#include <tbb/tbb.h>
 
 namespace zzlab
 {
@@ -467,6 +474,22 @@ namespace zzlab
 		};
 
 		typedef AsyncEvents<boost::function<void()> > AsyncEvents0;
+
+		struct Parallel
+		{
+			template<class Range, class Body> static void For(Range range, Body body)
+			{
+				tbb::parallel_for(range, body);
+			}
+		};
+
+		struct Sequential
+		{
+			template<class Range, class Body> static void For(Range range, Body body)
+			{
+				body(range);
+			}
+		};
 	}
 }
 

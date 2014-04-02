@@ -22,6 +22,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #include <opencv2/opencv.hpp>
@@ -29,11 +30,38 @@ extern "C" {
 
 #include <comdef.h>
 #include <dshow.h>
+#include <dvdmedia.h>
+#include <wmsdkidl.h>
+
+#import "qedit.dll"
 
 namespace zzlab
 {
 	namespace av
 	{
+		using DexterLib::ISampleGrabberPtr;
+		using DexterLib::ISampleGrabber;
+		using DexterLib::ISampleGrabberCB;
+
+		_COM_SMARTPTR_TYPEDEF(IMoniker, __uuidof(IMoniker));
+		_COM_SMARTPTR_TYPEDEF(IEnumMoniker, __uuidof(IEnumMoniker));
+		_COM_SMARTPTR_TYPEDEF(IPropertyBag, __uuidof(IPropertyBag));
+		_COM_SMARTPTR_TYPEDEF(IRunningObjectTable, __uuidof(IRunningObjectTable));
+
+		_COM_SMARTPTR_TYPEDEF(ICreateDevEnum, __uuidof(ICreateDevEnum));
+		_COM_SMARTPTR_TYPEDEF(IAMStreamConfig, __uuidof(IAMStreamConfig));
+		_COM_SMARTPTR_TYPEDEF(ICaptureGraphBuilder2, __uuidof(ICaptureGraphBuilder2));
+		_COM_SMARTPTR_TYPEDEF(IBaseFilter, __uuidof(IBaseFilter));
+
+		_COM_SMARTPTR_TYPEDEF(IGraphBuilder, __uuidof(IGraphBuilder));
+		_COM_SMARTPTR_TYPEDEF(ICaptureGraphBuilder2, __uuidof(ICaptureGraphBuilder2));
+		_COM_SMARTPTR_TYPEDEF(IMediaFilter, __uuidof(IMediaFilter));
+		_COM_SMARTPTR_TYPEDEF(IMediaControl, __uuidof(IMediaControl));
+
+		typedef std::vector<IMonikerPtr> monikers_t;
+		typedef std::pair<AM_MEDIA_TYPE*, VIDEO_STREAM_CONFIG_CAPS> stream_cap;
+		typedef std::vector<stream_cap> stream_caps_t;
+
 		ZZAV_API void install(void);
 
 		class ZZAV_API FileDemuxer
@@ -476,6 +504,103 @@ namespace zzlab
 
 			size_t mStopCount;
 			void handleStop();
+		};
+
+		template<class T1, class T2>
+		void enumerateAll(T1 e, std::vector<T2>& ret)
+		{
+			e->Reset();
+			ULONG cFetched;
+			T2 item;
+			while (true)
+			{
+				HRESULT hr = e->Next(1, &item, &cFetched);
+				if (hr != S_OK) break;
+
+				ret.push_back(item);
+			}
+		}
+
+		ZZAV_API void enumerateDevices(const CLSID& clsid, monikers_t& monikers);
+		ZZAV_API _bstr_t getFriendlyName(const IMonikerPtr& moniker);
+		ZZAV_API void dumpMonikerFriendlyNames(const monikers_t& mks);
+		ZZAV_API AM_MEDIA_TYPE* allocMediaType();
+		ZZAV_API void freeMediaType(AM_MEDIA_TYPE& mt);
+		ZZAV_API void deleteMediaType(AM_MEDIA_TYPE *pmt);
+		ZZAV_API void deleteStreamCaps(stream_caps_t& caps);
+		ZZAV_API AM_MEDIA_TYPE* getMediaType(const stream_caps_t& caps, int width, int height, const GUID& subtype);
+		ZZAV_API void dumpMediaType(AM_MEDIA_TYPE* mt);
+
+		class ZZAV_API Scaler
+		{
+		public:
+			int srcW;
+			int srcH;
+			PixelFormat srcFormat;
+
+			int dstW;
+			int dstH;
+			PixelFormat dstFormat;
+
+			int flags;
+
+			explicit Scaler();
+			virtual ~Scaler();
+
+			void init()
+			{
+				mCtx = sws_getContext(srcW, srcH, srcFormat, dstW, dstH, dstFormat, flags, NULL, NULL, NULL);
+			}
+
+			void scale(const uint8_t *const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t *const dst[], const int dstStride[])
+			{
+				sws_scale(mCtx, srcSlice, srcStride, srcSliceY, srcSliceH, dst, dstStride);
+			}
+
+			void scale(const uint8_t *const srcSlice[], const int srcStride[], int srcSliceH, uint8_t *const dst[], const int dstStride[])
+			{
+				scale(srcSlice, srcStride, 0, srcSliceH, dst, dstStride);
+			}
+
+		protected:
+			SwsContext* mCtx;
+		};
+
+		class ZZAV_API VideoCap : protected ISampleGrabberCB
+		{
+		public:
+			// event
+			boost::function<void(double, IMediaSample*)> onFrame;
+
+			explicit VideoCap();
+			virtual ~VideoCap();
+
+			void init(IMonikerPtr moniker);
+			void getStreamCaps(stream_caps_t& ret);
+			void setFormat(int width, int height, const GUID& subtype);
+			void setFormat(const stream_caps_t& caps, int width, int height, const GUID& subtype);
+			void setFormat(AM_MEDIA_TYPE* mt);
+			void setNullSyncSource();
+			void render();
+			AM_MEDIA_TYPE* getConnectedMediaType();
+			void dumpConnectedMediaType();
+			void start();
+			void stop();
+
+		protected:
+			IBindCtxPtr mBindCtx;
+			ICaptureGraphBuilder2Ptr mCaptureGraph;
+			IBaseFilterPtr mSourceFilter;
+			IBaseFilterPtr mSampleGrabberFilter;
+			IBaseFilterPtr mRendererFilter;
+			IGraphBuilderPtr mGraph;
+
+			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void ** ppvObject);
+			ULONG STDMETHODCALLTYPE AddRef(void);
+			ULONG STDMETHODCALLTYPE Release(void);
+
+			HRESULT STDMETHODCALLTYPE raw_SampleCB(double SampleTime, DexterLib::IMediaSample *pSample);
+			HRESULT STDMETHODCALLTYPE raw_BufferCB(double SampleTime, BYTE *pBuffer, long BufferLen);
 		};
 
 	} // namespace av

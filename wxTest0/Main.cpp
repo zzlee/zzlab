@@ -13,6 +13,7 @@
 #include <boost/array.hpp>
 #include <boost/format.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 
 #include <wx/listctrl.h>
 
@@ -85,6 +86,18 @@ static void getROI_YUV420P(AVFrame* src, AVFrame* dst, const cv::Rect& roi)
 	dst->linesize[2] = src->linesize[2];
 }
 
+static void getROI_YUV422P(AVFrame* src, AVFrame* dst, const cv::Rect& roi)
+{
+	dst->width = roi.width;
+	dst->height = roi.height;
+	dst->data[0] = src->data[0] + roi.x + roi.y * src->linesize[0];
+	dst->data[1] = src->data[1] + roi.x / 2 + roi.y * src->linesize[1];
+	dst->data[2] = src->data[2] + roi.x / 2 + roi.y * src->linesize[2];
+	dst->linesize[0] = src->linesize[0];
+	dst->linesize[1] = src->linesize[1];
+	dst->linesize[2] = src->linesize[2];
+}
+
 struct FileNameMapping : public boost::unordered_map<std::string, boost::filesystem::wpath>
 {
 	void load(XmlNode* node)
@@ -139,7 +152,7 @@ class VideoQuadRenderer
 {
 public:
 	d3d9::Device* dev;
-	d3d9::DynamicYV12TextureResource* videoTexture;
+	d3d9::DynamicYUVTextureResource* videoTexture;
 	gfx::Camera camera;
 	Eigen::Affine3f t2;
 	Eigen::Affine3f t1;
@@ -244,7 +257,7 @@ class MyFrame : public wxFrame
 {
 public:
 	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size) :
-		wxFrame(NULL, wxID_ANY, title, pos, size)
+		wxFrame(NULL, wxID_ANY, title, pos, size), mVideoCapTimer(_MainService)
 	{
 		wxMenu *menuFile = new wxMenu;
 		menuFile->Append(ID_StopAll, "&Stop all\tCtrl-S");
@@ -304,6 +317,9 @@ public:
 				(boost::format("LiveROI%d") % i).str().c_str()));
 		}
 
+		mUpdateLiveTextures = false;
+		initVideoCap();
+
 		mState = State_Ready;
 		mCurrentCut = NULL;
 		mAfterStop = bind(dummy);
@@ -316,6 +332,13 @@ public:
 			delete mDevices[i];
 			delete mClearScenes[i];
 		}
+
+		AVFrame* frame;
+		while (mFreeQ.pop(frame))
+			av_frame_free(&frame);
+
+		while (mAllocQ.pop(frame))
+			av_frame_free(&frame);
 	}
 
 protected:
@@ -336,9 +359,92 @@ protected:
 	boost::array<av::SimpleMediaPlayer*, 3> mMediaPlayers;
 
 	boost::array<VideoQuadRenderer*, 7> mQuads;
-	boost::array<d3d9::DynamicYV12TextureResource*, 7> mVideoTextures;
+	boost::array<d3d9::DynamicYUVTextureResource*, 7> mVideoTextures;
 	boost::array<cv::Rect, 7> mVideoROIs;
 	boost::array<cv::Rect, 7> mLiveROIs;
+
+	av::VideoCap mVideoCap;
+	av::Scaler mScaler;
+
+	lockfree::spsc_queue<AVFrame*, lockfree::capacity<5> > mFreeQ;
+	lockfree::spsc_queue<AVFrame*, lockfree::capacity<5> > mAllocQ;
+	asio::deadline_timer mVideoCapTimer;
+	bool mUpdateLiveTextures;
+
+	void onFrame(double t, IMediaSample* ms)
+	{
+		//ZZLAB_TRACE_THIS();
+
+		AVFrame* frame;
+		if (!mFreeQ.pop(frame))
+		{
+			//ZZLAB_TRACE("FAILED to dequeue");
+			return;
+		}
+
+		uint8_t* src;
+		HR(ms->GetPointer(&src));
+		int srcStride = mScaler.srcW * 2; // YUY2
+		mScaler.scale(&src, &srcStride, 480, frame->data, frame->linesize);
+
+		if (!mAllocQ.push(frame))
+		{
+			//ZZLAB_TRACE("FAILED to enqueue");
+			av_frame_free(&frame);
+		}
+	}
+
+	void initVideoCap()
+	{
+		av::monikers_t mks;
+		av::enumerateDevices(CLSID_VideoInputDeviceCategory, mks);
+		av::dumpMonikerFriendlyNames(mks);
+
+		XmlNode* node = _Settings.first_node("VideoCap0");
+
+		mVideoCap.onFrame = bind(&MyFrame::onFrame, this, _1, _2);
+
+		XmlAttribute* attr = node->first_attribute("index");
+		mVideoCap.init(mks[atoi(attr->value())]);
+
+		attr = node->first_attribute("null-sync-source");
+		if (_stricmp(attr->value(), "true") == 0)
+			mVideoCap.setNullSyncSource();
+
+		attr = node->first_attribute("width");
+		int width = atoi(attr->value());
+
+		attr = node->first_attribute("height");
+		int height = atoi(attr->value());
+
+		mVideoCap.setFormat(width, height, MEDIASUBTYPE_YUY2);
+		mVideoCap.render();
+		mVideoCap.dumpConnectedMediaType();
+
+		mScaler.srcW = mScaler.dstW = width;
+		mScaler.srcH = mScaler.dstH = height;
+		mScaler.srcFormat = AV_PIX_FMT_YUYV422;
+		mScaler.dstFormat = AV_PIX_FMT_YUV422P;
+		mScaler.init();
+
+		while (true)
+		{
+			AVFrame* frame = av_frame_alloc();
+			frame->width = mScaler.dstW;
+			frame->height = mScaler.dstH;
+			frame->format = mScaler.dstFormat;
+			av_frame_get_buffer(frame, 1);
+
+			if (!mFreeQ.push(frame))
+			{
+				av_frame_free(&frame);
+				break;
+			}
+		}
+
+		mVideoCap.start();
+		renderVideoCap();
+	}
 
 	d3d9::Device* createDevice(XmlNode* node)
 	{
@@ -379,6 +485,48 @@ protected:
 		return dev;
 	}
 
+	void updateLiveTexture(AVFrame* frame, size_t idx)
+	{
+		AVFrame tmp;
+
+		getROI_YUV422P(frame, &tmp, mLiveROIs[idx]);
+		mVideoTextures[idx]->update(&tmp);
+	}
+
+	void renderVideoCap(system::error_code err = system::error_code())
+	{
+		if (err)
+			return;
+
+		int ch = cv::waitKey(1);
+
+		AVFrame* frame;		
+		if (mAllocQ.pop(frame))
+		{
+#if 0
+			cv::Mat1b y(480, 640, frame->data[0], frame->linesize[0]);
+			cv::imshow("y", y);
+
+			cv::Mat1b u(480, 640 / 2, frame->data[1], frame->linesize[1]);
+			cv::imshow("u", u);
+
+			cv::Mat1b v(480, 640 / 2, frame->data[2], frame->linesize[2]);
+			cv::imshow("v", v);
+#endif
+			if (mUpdateLiveTextures)
+			{
+				updateLiveTexture(frame, 2);
+				updateLiveTexture(frame, 3);
+				updateLiveTexture(frame, 4);
+			}
+
+			mFreeQ.push(frame);
+		}
+
+		mVideoCapTimer.expires_from_now(posix_time::milliseconds(4));
+		mVideoCapTimer.async_wait(bind(&MyFrame::renderVideoCap, this, asio::placeholders::error));
+	}
+
 	void OnItemActivated(wxListEvent& event)
 	{
 		//ZZLAB_TRACE_THIS();
@@ -414,9 +562,9 @@ protected:
 		mCurrentCut = &_Schedule[idx];
 
 		int64_t playTime = _Timer->getTime();
-		play0(_FileNameMapping[mCurrentCut->A], playTime);
-		play1(_FileNameMapping[mCurrentCut->B], playTime);
-		play2(_FileNameMapping[mCurrentCut->C], playTime);
+		playA(_FileNameMapping[mCurrentCut->A], playTime);
+		playB(_FileNameMapping[mCurrentCut->B], playTime);
+		playC(_FileNameMapping[mCurrentCut->C], playTime);
 
 		mState = State_Playing;
 	}
@@ -462,6 +610,7 @@ protected:
 
 		ZZLAB_TRACE_VALUE(mCurrentCut->fadeOut);
 
+		mUpdateLiveTextures = false;
 		mCurrentCut = NULL;
 		mState = State_Ready;
 		mAfterStop();
@@ -470,7 +619,8 @@ protected:
 
 	void stopMediaPlayer(size_t idx)
 	{
-		mMediaPlayers[idx]->stop(_MainService.wrap(bind(&MyFrame::handleStop, this, idx)));
+		if (mMediaPlayers[idx])
+			mMediaPlayers[idx]->stop(_MainService.wrap(bind(&MyFrame::handleStop, this, idx)));
 	}
 
 	function<void()> mAfterStop;
@@ -484,15 +634,42 @@ protected:
 		stopMediaPlayer(2);
 	}
 	
-	void initQuad(size_t device_index, size_t quad_index)
+	void initVideoQuad(size_t device_index, size_t quad_index)
 	{
 		d3d9::Device* device = mDevices[device_index];
 		const cv::Rect& roi = mVideoROIs[quad_index];
 
-		d3d9::DynamicYV12TextureResource* texture = new d3d9::DynamicYV12TextureResource();
+		d3d9::DynamicYUVTextureResource* texture = new d3d9::DynamicYUVTextureResource();
 		texture->dev = device->dev;
 		texture->width = roi.width;
 		texture->height = roi.height;
+		texture->uvWidth = roi.width / 2;
+		texture->uvHeight = roi.height / 2;
+		texture->deviceResourceEvents = &device->deviceResourceEvents;
+		texture->init();
+		texture->set(d3d9::ScalarYUV(0, 128, 128));
+
+		VideoQuadRenderer* quad = new VideoQuadRenderer();
+		quad->dev = device;
+		quad->videoTexture = texture;
+		quad->load(_Settings.first_node((format("Quad%d") % quad_index).str().c_str()));
+		quad->init();
+
+		mVideoTextures[quad_index] = texture;
+		mQuads[quad_index] = quad;
+	}
+
+	void initLiveQuad(size_t device_index, size_t quad_index)
+	{
+		d3d9::Device* device = mDevices[device_index];
+		const cv::Rect& roi = mVideoROIs[quad_index];
+
+		d3d9::DynamicYUVTextureResource* texture = new d3d9::DynamicYUVTextureResource();
+		texture->dev = device->dev;
+		texture->width = roi.width;
+		texture->height = roi.height;
+		texture->uvWidth = roi.width / 2;
+		texture->uvHeight = roi.height;
 		texture->deviceResourceEvents = &device->deviceResourceEvents;
 		texture->init();
 		texture->set(d3d9::ScalarYUV(0, 128, 128));
@@ -554,37 +731,42 @@ protected:
 		}
 	}
 
-	void play0(boost::filesystem::wpath path, int64_t playTime)
+	void playA(boost::filesystem::wpath path, int64_t playTime)
 	{
 		if (path.filename() == "LIVE")
 		{
-			// TODO: LIVE stream
+			initLiveQuad(1, 2);
+			initLiveQuad(2, 3);
+			initLiveQuad(3, 4);
+
+			// create live player
+			mUpdateLiveTextures = true;
 		}
 		else
 		{
-			initQuad(0, 0);
-			initQuad(0, 1);
+			initVideoQuad(1, 2);
+			initVideoQuad(2, 3);
+			initVideoQuad(3, 4);
 
 			// create media player
-			initMediaPlayer(0, path, playTime);
+			initMediaPlayer(1, path, playTime);
 		}
 	}
 
-	void play1(boost::filesystem::wpath path, int64_t playTime)
+	void playB(boost::filesystem::wpath path, int64_t playTime)
 	{
-		initQuad(1, 2);
-		initQuad(2, 3);
-		initQuad(3, 4);
+		initVideoQuad(0, 0);
+		initVideoQuad(0, 1);
 
 		// create media player
-		initMediaPlayer(1, path, playTime);
+		initMediaPlayer(0, path, playTime);
 	}
 
-	void play2(boost::filesystem::wpath path, int64_t playTime)
+	void playC(boost::filesystem::wpath path, int64_t playTime)
 	{
 		// renderer for device 2
-		initQuad(4, 5);
-		initQuad(4, 6);
+		initVideoQuad(4, 5);
+		initVideoQuad(4, 6);
 
 		// create media player
 		initMediaPlayer(2, path, playTime);
@@ -610,6 +792,7 @@ protected:
 
 	void shutdown()
 	{
+		mVideoCap.stop();
 		utils::stopAllServices();
 
 		Destroy();
@@ -630,7 +813,7 @@ wxIMPLEMENT_APP(MyApp);
 bool MyApp::OnInit()
 {
 	// set log level
-	_LogFlags = LOG_TO_WIN32DEBUG;
+	_LogFlags = LOG_TO_WIN32DEBUG | LOG_TO_FILE;
 	log4cplus::Logger::getRoot().setLogLevel(log4cplus::TRACE_LOG_LEVEL);
 
 	// install plugins

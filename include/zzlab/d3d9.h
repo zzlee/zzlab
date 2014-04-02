@@ -161,16 +161,27 @@ namespace zzlab
 			cv::Scalar src
 			);
 
+		inline YUVTexture createYUVTexture(
+			LPDIRECT3DDEVICE9 pDevice,
+			UINT Width,
+			UINT Height,
+			UINT uvWidth,
+			UINT uvHeight
+			)
+		{
+			return make_tuple(
+				createDynamicTexture(pDevice, Width, Height, D3DFMT_L8),
+				createDynamicTexture(pDevice, uvWidth, uvHeight, D3DFMT_L8),
+				createDynamicTexture(pDevice, uvWidth, uvHeight, D3DFMT_L8));
+		}
+
 		inline YUVTexture createYV12Texture(
 			LPDIRECT3DDEVICE9 pDevice,
 			UINT Width,
 			UINT Height
 			)
 		{
-			return make_tuple(
-				createDynamicTexture(pDevice, Width, Height, D3DFMT_L8),
-				createDynamicTexture(pDevice, Width / 2, Height / 2, D3DFMT_L8),
-				createDynamicTexture(pDevice, Width / 2, Height / 2, D3DFMT_L8));
+			return createYUVTexture(pDevice, Width, Height, Width / 2, Height / 2);
 		}
 
 		inline void updateYUVTexture(
@@ -304,7 +315,7 @@ namespace zzlab
 			void initResources();
 		};
 
-		class ZZD3D9_API DynamicYV12TextureResource : public gfx::Resource
+		class ZZD3D9_API DynamicYUVTextureResource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
@@ -312,10 +323,13 @@ namespace zzlab
 			int width;
 			int height;
 
+			int uvWidth;
+			int uvHeight;
+
 			YUVTexture texture;
 
-			DynamicYV12TextureResource();
-			~DynamicYV12TextureResource();
+			DynamicYUVTextureResource();
+			~DynamicYUVTextureResource();
 
 			void init();
 			void update(AVFrame* frame);

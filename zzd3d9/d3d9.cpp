@@ -875,41 +875,41 @@ namespace zzlab
 			texture = createDynamicTexture(dev, width, height, format);
 		}
 		
-		DynamicYV12TextureResource::DynamicYV12TextureResource() :
+		DynamicYUVTextureResource::DynamicYUVTextureResource() :
 			deviceResourceEvents(NULL),
 			width(256),
-			height(256)
+			height(256),
+			uvWidth(256),
+			uvHeight(256)
 		{
 			ZZLAB_TRACE_THIS();
 		}
 
-		DynamicYV12TextureResource::~DynamicYV12TextureResource()
+		DynamicYUVTextureResource::~DynamicYUVTextureResource()
 		{
 			ZZLAB_TRACE_THIS();
 		}
 
-		void DynamicYV12TextureResource::init()
+		void DynamicYUVTextureResource::init()
 		{
 			initResources();
 
-			mEvent0.connect(bind(&DynamicYV12TextureResource::main, this));
+			mEvent0.connect(bind(&DynamicYUVTextureResource::main, this));
 			main();
 		}
 
-		void DynamicYV12TextureResource::update(AVFrame* frame)
+		void DynamicYUVTextureResource::update(AVFrame* frame)
 		{
-			assert(frame->width == width && frame->height == height);
-
 			updateYUVTexture(dev, texture,
 				make_tuple(
 				cv::Mat1b(height, width, frame->data[0], frame->linesize[0]),
-				cv::Mat1b(height / 2, width / 2, frame->data[1], frame->linesize[1]),
-				cv::Mat1b(height / 2, width / 2, frame->data[2], frame->linesize[2])
+				cv::Mat1b(uvHeight, uvWidth, frame->data[1], frame->linesize[1]),
+				cv::Mat1b(uvHeight, uvWidth, frame->data[2], frame->linesize[2])
 				));
 		}
 
 #include <boost/asio/yield.hpp>
-		void DynamicYV12TextureResource::main()
+		void DynamicYUVTextureResource::main()
 		{
 			reenter(__coro_main) for (;;)
 			{
@@ -922,10 +922,11 @@ namespace zzlab
 		}
 #include <boost/asio/unyield.hpp>
 
-		void DynamicYV12TextureResource::initResources()
+		void DynamicYUVTextureResource::initResources()
 		{
-			ZZLAB_TRACE("Create dynamic YV12 texture of " << width << 'x' << height);
-			texture = createYV12Texture(dev, width, height);
+			ZZLAB_TRACE("Create dynamic YUV texture, Y plane size: " << width << 'x' << height << 
+				", UV plane size: " << uvWidth << 'x' << uvHeight);
+			texture = createYUVTexture(dev, width, height, uvWidth, uvHeight);
 		}
 
 		EffectResource::EffectResource() : deviceResourceEvents(NULL)

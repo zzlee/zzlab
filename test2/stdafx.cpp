@@ -4,5 +4,6 @@
 
 #include "stdafx.h"
 
-// TODO:  在 STDAFX.H 中參考您需要的任何其他標頭，
-// 而不要在這個檔案中參考
+#include <initguid.h>
+#include <dshow.h>
+#include <wmsdkidl.h>

@@ -77,7 +77,7 @@ namespace zzlab
 		{
 			if (mFormatCtx != NULL)
 			{
-				ZZLAB_ERROR(__FUNCTION__ <<L": already initialized");
+				ZZLAB_ERROR(__FUNCTION__ << L": already initialized");
 				return NULL;
 			}
 
@@ -102,7 +102,7 @@ namespace zzlab
 
 			return mFormatCtx;
 		}
-		
+
 		Decoder::Decoder() : mCodecCtx(NULL)
 		{
 			ZZLAB_TRACE_THIS();
@@ -145,7 +145,7 @@ namespace zzlab
 				return NULL;
 			}
 
-			switch(type)
+			switch (type)
 			{
 			case AVMEDIA_TYPE_VIDEO:
 				mDecode = avcodec_decode_video2;
@@ -155,7 +155,7 @@ namespace zzlab
 				mDecode = avcodec_decode_audio4;
 				break;
 			}
-			
+
 			mCodecCtx = codecCtx;
 
 			return mCodecCtx;
@@ -307,7 +307,7 @@ namespace zzlab
 
 			return frame;
 		}
-		
+
 		FileMediaPlayer::FileMediaPlayer() :
 			dumpInfo(true),
 			videoDecoderThreads(0),
@@ -337,7 +337,7 @@ namespace zzlab
 			av_free_packet(&mPacket);
 			av_frame_free(&mFrame);
 			av_frame_free(&mFrameToEnqueue);
-			
+
 			for (std::vector<StreamHandler*>::const_iterator i = mStreamHandlers.begin(); i != mStreamHandlers.end(); ++i)
 			{
 				if (*i)
@@ -459,12 +459,12 @@ namespace zzlab
 
 		void FileMediaPlayer::stop(boost::function<void()> afterStop)
 		{
-			if (! isPlaying())
+			if (!isPlaying())
 			{
 				ZZLAB_WARN("FileMediaPlayer is NOT playing");
 				return;
 			}
-			
+
 			mStopping.store(true, memory_order_release);
 			mAfterStop = afterStop;
 			mTimer.cancel();
@@ -519,7 +519,7 @@ namespace zzlab
 			{
 				mPlaying.store(0, memory_order_release);
 				mAfterStop();
-				
+
 				return;
 			}
 
@@ -736,7 +736,7 @@ namespace zzlab
 					ZZLAB_INFO("    defaultHighOutputLatency: " << info->defaultHighOutputLatency);
 					ZZLAB_INFO("    defaultSampleRate: " << info->defaultSampleRate);
 				}
-				else 
+				else
 				{
 					ZZLAB_ERROR("NO INFO for this device!!");
 				}
@@ -858,7 +858,7 @@ namespace zzlab
 			}
 		}
 
-		int AudioDevice::onDataArrived(const uint8_t *input, 
+		int AudioDevice::onDataArrived(const uint8_t *input,
 			uint8_t *output, unsigned long frameCount,
 			const PaStreamCallbackTimeInfo *timeInfo,
 			PaStreamCallbackFlags statusFlags, AudioDevice *pThis)
@@ -877,7 +877,7 @@ namespace zzlab
 			return paContinue;
 		}
 
-		NullRenderer::NullRenderer() : 
+		NullRenderer::NullRenderer() :
 			timeSource(NULL),
 			source(NULL),
 			renderRate(240.0f),
@@ -913,7 +913,7 @@ namespace zzlab
 
 		void NullRenderer::stop(boost::function<void()> afterStop)
 		{
-			if (! isPlaying())
+			if (!isPlaying())
 			{
 				ZZLAB_WARN("Null renderer is NOT playing");
 				return;
@@ -994,7 +994,7 @@ namespace zzlab
 
 		void AudioQueueRenderer::stop(boost::function<void()> afterStop)
 		{
-			if (! isPlaying())
+			if (!isPlaying())
 			{
 				ZZLAB_WARN("Audio queue is NOT playing");
 				return;
@@ -1006,7 +1006,7 @@ namespace zzlab
 			device->waitForBuffer(bind(&AudioQueueRenderer::stopRenderAudio, this));
 		}
 
-		void AudioQueueRenderer::renderAudio(const uint8_t *input, uint8_t *output, 
+		void AudioQueueRenderer::renderAudio(const uint8_t *input, uint8_t *output,
 			unsigned long frameCount, const PaStreamCallbackTimeInfo* timeInfo)
 		{
 			//ZZLAB_TRACE_THIS();
@@ -1133,17 +1133,17 @@ namespace zzlab
 			rendererEvents->waitForFrameBegin(bind(&VideoQueueRenderer::renderVideo, this));
 		}
 
-		SimpleMediaPlayer::SimpleMediaPlayer() : 
+		SimpleMediaPlayer::SimpleMediaPlayer() :
 			timeSource(NULL),
 			audioDevice(NULL),
-			mAudioRenderer(NULL), 
+			mAudioRenderer(NULL),
 			mVideoRenderer(NULL),
 			mVideoCodecCtx(NULL)
 		{
 			ZZLAB_TRACE_THIS();
 		}
 
-		SimpleMediaPlayer::~SimpleMediaPlayer() 
+		SimpleMediaPlayer::~SimpleMediaPlayer()
 		{
 			ZZLAB_TRACE_THIS();
 
@@ -1223,6 +1223,348 @@ namespace zzlab
 		{
 			if (--mStopCount == 0)
 				mAfterStop();
+		}
+
+		void enumerateDevices(const CLSID& clsid, monikers_t& monikers)
+		{
+			ICreateDevEnumPtr createDevEnum(CLSID_SystemDeviceEnum);
+
+			IEnumMonikerPtr enumMoniker;
+			HR(createDevEnum->CreateClassEnumerator(clsid, &enumMoniker, 0));
+
+			enumerateAll(enumMoniker, monikers);
+		}
+
+		_bstr_t getFriendlyName(const IMonikerPtr& moniker)
+		{
+			IBindCtxPtr bindCtx;
+			HR(CreateBindCtx(0, &bindCtx));
+
+			IPropertyBagPtr propertyBag;
+			HRESULT hr = moniker->BindToStorage(bindCtx, NULL, IID_IPropertyBag, (void **)&propertyBag);
+			if (SUCCEEDED(hr))
+			{
+				_variant_t var;
+				hr = propertyBag->Read(L"FriendlyName", &var, NULL);
+				if (SUCCEEDED(hr)) return var;
+			}
+
+			return _bstr_t();
+		}
+
+		void dumpMonikerFriendlyNames(const monikers_t& mks)
+		{
+			for (size_t i = 0; i < mks.size(); ++i)
+			{
+				ZZLAB_INFO("Index: " << i);
+
+				const IMonikerPtr& m = mks[i];
+
+				_bstr_t name = av::getFriendlyName(m);
+				if (name.length() > 0)
+					ZZLAB_INFO("Name: " << name);
+			}
+		}
+
+		AM_MEDIA_TYPE* allocMediaType()
+		{
+			AM_MEDIA_TYPE* ret = (AM_MEDIA_TYPE*)CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE));
+			memset(ret, 0, sizeof(AM_MEDIA_TYPE));
+
+			return ret;
+		}
+
+		void freeMediaType(AM_MEDIA_TYPE& mt)
+		{
+			if (mt.cbFormat != 0)
+			{
+				CoTaskMemFree((PVOID)mt.pbFormat);
+				mt.cbFormat = 0;
+				mt.pbFormat = NULL;
+			}
+			if (mt.pUnk != NULL)
+			{
+				// pUnk should not be used.
+				mt.pUnk->Release();
+				mt.pUnk = NULL;
+			}
+		}
+
+		void deleteMediaType(AM_MEDIA_TYPE *pmt)
+		{
+			if (pmt != NULL)
+			{
+				freeMediaType(*pmt);
+				CoTaskMemFree(pmt);
+			}
+		}
+
+		void deleteStreamCaps(stream_caps_t& caps)
+		{
+			for (stream_caps_t::const_iterator i = caps.begin(); i != caps.end(); ++i)
+				deleteMediaType((*i).first);
+
+			caps.clear();
+		}
+
+		AM_MEDIA_TYPE* getMediaType(const stream_caps_t& caps, int width, int height, const GUID& subtype)
+		{
+			// select a format
+			for (stream_caps_t::const_iterator i = caps.begin(); i != caps.end(); ++i)
+			{
+				const stream_cap& cap = *i;
+
+				if (width == cap.second.InputSize.cx && height == cap.second.InputSize.cy &&
+					subtype == cap.first->subtype)
+				{
+					return cap.first;
+				}
+			}
+
+			return NULL;
+		}
+
+		void dumpMediaType(AM_MEDIA_TYPE* mt)
+		{
+			if (mt->majortype == MEDIATYPE_Audio)
+				ZZLAB_INFO("MajorType: MEDIATYPE_Audio");
+			else if (mt->majortype == MEDIATYPE_Video)
+				ZZLAB_INFO("MajorType: MEDIATYPE_Video");
+			else
+				ZZLAB_INFO("MajorType: Unknown");
+
+			if (mt->subtype == MEDIASUBTYPE_YUY2)
+				ZZLAB_INFO("SubType: MEDIASUBTYPE_YUY2");
+			else if (mt->subtype == MEDIASUBTYPE_YV12)
+				ZZLAB_INFO("SubType: MEDIASUBTYPE_YV12");
+			else if (mt->subtype == WMMEDIASUBTYPE_I420)
+				ZZLAB_INFO("SubType: WMMEDIASUBTYPE_I420");
+			else if (mt->subtype == MEDIASUBTYPE_RGB24)
+				ZZLAB_INFO("SubType: MEDIASUBTYPE_RGB24");
+			else if (mt->subtype == MEDIASUBTYPE_RGB32)
+				ZZLAB_INFO("SubType: MEDIASUBTYPE_RGB32");
+			else
+				ZZLAB_INFO("SubType: Unknown");
+
+			BITMAPINFOHEADER* bih;
+			if (mt->formattype == FORMAT_VideoInfo)
+			{
+				ZZLAB_INFO("FormatType: FORMAT_VideoInfo");
+
+				VIDEOINFOHEADER* vih = (VIDEOINFOHEADER*)mt->pbFormat;
+				ZZLAB_INFO("rcSource: " << vih->rcSource.left << ',' << vih->rcSource.top << ',' << vih->rcSource.right << ',' << vih->rcSource.bottom);
+				ZZLAB_INFO("rcTarget: " << vih->rcTarget.left << ',' << vih->rcTarget.top << ',' << vih->rcTarget.right << ',' << vih->rcTarget.bottom);
+				ZZLAB_INFO("dwBitRate: " << vih->dwBitRate);
+				ZZLAB_INFO("dwBitErrorRate: " << vih->dwBitErrorRate);
+				ZZLAB_INFO("AvgTimePerFrame: " << vih->AvgTimePerFrame / utils::Timer::fTimeUnit);
+
+				bih = &vih->bmiHeader;
+			}
+			else if (mt->formattype == FORMAT_VideoInfo2)
+			{
+				ZZLAB_INFO("FormatType: FORMAT_VideoInfo2");
+
+				VIDEOINFOHEADER2* vih = (VIDEOINFOHEADER2*)mt->pbFormat;
+				ZZLAB_INFO("rcSource: " << vih->rcSource.left << ',' << vih->rcSource.top << ',' << vih->rcSource.right << ',' << vih->rcSource.bottom);
+				ZZLAB_INFO("rcTarget: " << vih->rcTarget.left << ',' << vih->rcTarget.top << ',' << vih->rcTarget.right << ',' << vih->rcTarget.bottom);
+				ZZLAB_INFO("dwBitRate: " << vih->dwBitRate);
+				ZZLAB_INFO("dwBitErrorRate: " << vih->dwBitErrorRate);
+				ZZLAB_INFO("AvgTimePerFrame: " << vih->AvgTimePerFrame / utils::Timer::fTimeUnit);
+
+				bih = &vih->bmiHeader;
+			}
+			else
+			{
+				ZZLAB_INFO("FormatType: Unknown");
+
+				bih = NULL;
+			}
+
+			if (bih)
+			{
+				ZZLAB_INFO("biSize: " << bih->biSize);
+				ZZLAB_INFO("biWidth: " << bih->biWidth);
+				ZZLAB_INFO("biHeight: " << bih->biHeight);
+				ZZLAB_INFO("biPlanes: " << bih->biPlanes);
+				ZZLAB_INFO("biBitCount: " << bih->biBitCount);
+				ZZLAB_INFO("biCompression: " << bih->biCompression);
+				ZZLAB_INFO("biSizeImage: " << bih->biSizeImage);
+				ZZLAB_INFO("biXPelsPerMeter: " << bih->biXPelsPerMeter);
+				ZZLAB_INFO("biYPelsPerMeter: " << bih->biYPelsPerMeter);
+				ZZLAB_INFO("biClrUsed: " << bih->biClrUsed);
+				ZZLAB_INFO("biClrImportant: " << bih->biClrImportant);
+			}
+		}
+
+		Scaler::Scaler() : srcW(0), srcH(0), srcFormat(AV_PIX_FMT_RGB32),
+			dstW(0), dstH(0), dstFormat(AV_PIX_FMT_RGB32), flags(SWS_POINT), mCtx(NULL)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		Scaler::~Scaler()
+		{
+			ZZLAB_TRACE_THIS();
+
+			if (mCtx)
+				sws_freeContext(mCtx);
+		}
+
+		VideoCap::VideoCap()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		VideoCap::~VideoCap()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void VideoCap::init(IMonikerPtr moniker)
+		{
+			HR(CreateBindCtx(0, &mBindCtx));
+
+			IGraphBuilderPtr graphBuilder(CLSID_FilterGraph);
+
+			IBaseFilterPtr sourceFilter;
+			HR(moniker->BindToObject(mBindCtx, NULL, IID_IBaseFilter, (void**)&sourceFilter));
+			HR(graphBuilder->AddFilter(sourceFilter, L"Source"));
+
+			IBaseFilterPtr sampleGrabberFilter(__uuidof(DexterLib::SampleGrabber));
+			HR(graphBuilder->AddFilter(sampleGrabberFilter, L"SampleGrabber"));
+
+			IBaseFilterPtr nullRenderer(__uuidof(DexterLib::NullRenderer));
+			HR(graphBuilder->AddFilter(nullRenderer, L"Renderer"));
+
+			ICaptureGraphBuilder2Ptr captureGraphBuilder(CLSID_CaptureGraphBuilder2);
+			captureGraphBuilder->SetFiltergraph(graphBuilder);
+
+			mGraph = graphBuilder;
+			mCaptureGraph = captureGraphBuilder;
+			mSourceFilter = sourceFilter;
+			mSampleGrabberFilter = sampleGrabberFilter;
+			mRendererFilter = nullRenderer;
+		}
+
+		void VideoCap::getStreamCaps(stream_caps_t& ret)
+		{
+			IAMStreamConfigPtr config;
+			HR(mCaptureGraph->FindInterface(NULL, NULL, mSourceFilter, IID_IAMStreamConfig, (void**)&config));
+
+			int count, size;
+			HR(config->GetNumberOfCapabilities(&count, &size));
+
+			if (size != sizeof(VIDEO_STREAM_CONFIG_CAPS))
+				HR(E_NOTIMPL);
+
+			ret.resize(count);
+
+			for (int i = 0; i < count; ++i)
+			{
+				HR(config->GetStreamCaps(i, &ret[i].first, (BYTE*)&ret[i].second));
+			}
+		}
+
+		void VideoCap::setFormat(int width, int height, const GUID& subtype)
+		{
+			stream_caps_t caps;
+			getStreamCaps(caps);
+			setFormat(caps, width, height, subtype);
+			deleteStreamCaps(caps);
+		}
+
+		void VideoCap::setFormat(const stream_caps_t& caps, int width, int height, const GUID& subtype)
+		{
+			AM_MEDIA_TYPE* mt = getMediaType(caps, width, height, subtype);
+			if (mt)
+				setFormat(mt);
+		}
+
+		void VideoCap::setFormat(AM_MEDIA_TYPE* mt)
+		{
+			IAMStreamConfigPtr config;
+			HR(mCaptureGraph->FindInterface(NULL, NULL, mSourceFilter, IID_IAMStreamConfig, (void**)&config));
+			HR(config->SetFormat(mt));
+		}
+
+		void VideoCap::setNullSyncSource()
+		{
+			IMediaFilterPtr mediaFilter = mGraph;
+			HR(mediaFilter->SetSyncSource(NULL));
+		}
+
+		void VideoCap::render()
+		{
+			HR(mCaptureGraph->RenderStream(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video, mSourceFilter, mSampleGrabberFilter, mRendererFilter));
+
+			ISampleGrabberPtr sampleGrabber = mSampleGrabberFilter;
+			HR(sampleGrabber->SetCallback(this, 0));
+		}
+
+		AM_MEDIA_TYPE* VideoCap::getConnectedMediaType()
+		{
+			ISampleGrabberPtr sampleGrabber = mSampleGrabberFilter;
+
+			AM_MEDIA_TYPE* mt = allocMediaType();
+			HR(sampleGrabber->GetConnectedMediaType((DexterLib::_AMMediaType*)mt));
+
+			return mt;
+		}
+
+		void VideoCap::dumpConnectedMediaType()
+		{
+			AM_MEDIA_TYPE* mt = getConnectedMediaType();
+			if (mt)
+			{
+				dumpMediaType(mt);
+				deleteMediaType(mt);
+			}
+		}
+
+		void VideoCap::start()
+		{
+			IMediaControlPtr control = mGraph;
+			HR(control->Run());
+		}
+
+		void VideoCap::stop()
+		{
+			IMediaControlPtr control = mGraph;
+			HR(control->Stop());
+		}
+
+		HRESULT STDMETHODCALLTYPE VideoCap::QueryInterface(REFIID riid, void ** ppvObject)
+		{
+			if (!ppvObject) return E_POINTER;
+
+			if (riid == __uuidof(IUnknown))
+				*ppvObject = (IUnknown*)this;
+			else if (riid == __uuidof(ISampleGrabberCB))
+				*ppvObject = (ISampleGrabberCB*)this;
+
+			return E_NOINTERFACE;
+		}
+
+		ULONG STDMETHODCALLTYPE VideoCap::AddRef(void)
+		{
+			return 1;
+		}
+
+		ULONG STDMETHODCALLTYPE VideoCap::Release(void)
+		{
+			return 1;
+		}
+
+		HRESULT STDMETHODCALLTYPE VideoCap::raw_SampleCB(double SampleTime, DexterLib::IMediaSample *pSample)
+		{
+			onFrame(SampleTime, (IMediaSample*)pSample);
+
+			return S_OK;
+		}
+
+		HRESULT STDMETHODCALLTYPE VideoCap::raw_BufferCB(double SampleTime, BYTE *pBuffer, long BufferLen)
+		{
+			return E_UNEXPECTED;
 		}
 
 	} // namespace ab
