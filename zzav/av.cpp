@@ -309,6 +309,7 @@ namespace zzlab
 		}
 
 		FileMediaPlayer::FileMediaPlayer() :
+			loopPlay(false),
 			dumpInfo(true),
 			videoDecoderThreads(0),
 			videoQueueSize(16),
@@ -470,7 +471,7 @@ namespace zzlab
 			mTimer.cancel();
 		}
 
-		FileMediaPlayer::StreamHandler::StreamHandler()
+		FileMediaPlayer::StreamHandler::StreamHandler() : pts(0), offset(0)
 		{
 			ZZLAB_TRACE_THIS();
 		}
@@ -486,9 +487,10 @@ namespace zzlab
 				return NULL;
 
 			AVFrame* out = process(frame);
-			out->pts = av_rescale_q(
+			pts = av_rescale_q(
 				av_frame_get_best_effort_timestamp(frame),
 				base, utils::Timer::rTimeUnitQ);
+			out->pts = pts + offset;
 
 			return out;
 		}
@@ -539,6 +541,7 @@ namespace zzlab
 			{
 				if (!mDemuxer.read(&mPacket))
 				{
+					//ZZLAB_TRACE("end of stream?!");
 					mCurrentIndex = 0;
 					handleDelayedFrames();
 					break;
@@ -586,17 +589,6 @@ namespace zzlab
 				mFrameToEnqueue = NULL;
 			}
 
-			if (mCurrentIndex >= mStreamHandlers.size())
-			{
-				mPlaying.store(-1, memory_order_release);
-				mTimer.expires_from_now(posix_time::seconds(86400)); // wait forever
-				mTimer.async_wait(bind(&FileMediaPlayer::handleAfterEndOfStream, this, asio::placeholders::error));
-
-				mEndOfStream();
-
-				return;
-			}
-
 			while (true)
 			{
 				mHandler = mStreamHandlers[mCurrentIndex];
@@ -622,8 +614,46 @@ namespace zzlab
 					++mCurrentIndex;
 				}
 
-				mTimer.expires_from_now(posix_time::milliseconds(4));
-				mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this, asio::placeholders::error));
+				// end of stream
+				if (mCurrentIndex >= mStreamHandlers.size())
+				{
+					if (loopPlay)
+					{
+						for (size_t i = 0; i < mStreamHandlers.size(); ++i)
+						{
+							StreamHandler* handler = mStreamHandlers[i];
+							if (handler)
+							{
+								handler->offset += handler->pts;
+
+								//ZZLAB_TRACE(i << ": " << handler->pts << ',' << handler->offset);
+
+								// seek to begining
+								av_seek_frame(mDemuxer.getContext(), (int)i, 0, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME);
+
+								// flush codec context
+								avcodec_flush_buffers(handler->d.getContext());
+							}
+						}
+
+						// read more packets
+						readPacket();
+					}
+					else
+					{
+						mPlaying.store(-1, memory_order_release);
+						mTimer.expires_from_now(posix_time::seconds(86400)); // wait forever
+						mTimer.async_wait(bind(&FileMediaPlayer::handleAfterEndOfStream, this, asio::placeholders::error));
+
+						mEndOfStream();
+					}
+				}
+				else
+				{
+					mTimer.expires_from_now(posix_time::milliseconds(4));
+					mTimer.async_wait(bind(&FileMediaPlayer::handleDelayedFrames, this, asio::placeholders::error));
+				}
+
 				break;
 			}
 		}
@@ -940,8 +970,8 @@ namespace zzlab
 			size_t dropped = source->dequeue(now, frame);
 			if (frame)
 			{
-				if (dropped)
-					ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
+				//if (dropped)
+				//	ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
 
 				av_frame_free(&frame);
 			}
@@ -1043,8 +1073,8 @@ namespace zzlab
 					if (!mAudioFrame)
 						break;
 
-					if (dropped)
-						ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
+					//if (dropped)
+					//	ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
 
 					mAudioData = mAudioFrame->data[0];
 					mAudioSamples = mAudioFrame->nb_samples;
@@ -1122,8 +1152,8 @@ namespace zzlab
 
 			if (frame)
 			{
-				if (dropped)
-					ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
+				//if (dropped)
+				//	ZZLAB_WARN(__FUNCTION__ << ": " << dropped << " frame(s) dropped");
 
 				renderFrame(frame);
 				av_frame_free(&frame);

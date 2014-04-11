@@ -278,6 +278,7 @@ namespace zzlab
 		public:
 			boost::filesystem::wpath source;
 			bool dumpInfo;
+			bool loopPlay;
 
 			// for video
 			size_t videoDecoderThreads;
@@ -344,6 +345,9 @@ namespace zzlab
 				AVRational base;
 				zzlab::av::Decoder d;
 				zzlab::av::FrameQueue q;
+				int64_t pts;
+				int64_t offset;
+
 				StreamHandler();
 				virtual ~StreamHandler();
 
@@ -560,6 +564,11 @@ namespace zzlab
 			void scale(const uint8_t *const srcSlice[], const int srcStride[], int srcSliceH, uint8_t *const dst[], const int dstStride[])
 			{
 				scale(srcSlice, srcStride, 0, srcSliceH, dst, dstStride);
+			}
+
+			void scale(const uint8_t *const srcSlice[], const int srcStride[], uint8_t *const dst[], const int dstStride[])
+			{
+				scale(srcSlice, srcStride, 0, srcH, dst, dstStride);
 			}
 
 		protected:

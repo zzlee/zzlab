@@ -19,8 +19,6 @@
 
 #include <comdef.h>
 
-#include <rapidxml/rapidxml_utils.hpp>
-
 ZZLAB_USE_LOG4CPLUS(zzlab);
 
 using namespace boost;
@@ -36,7 +34,7 @@ namespace zzlab
 	ZZLAB_API asio::io_service _WorkerService;
 
 	ZZLAB_API XmlDocument _Settings;
-	static rapidxml::file<> *settingsFile = NULL;
+	static XmlFile* settingsFile = NULL;
 
 	static void initLogSystem()
 	{

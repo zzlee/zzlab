@@ -15,6 +15,7 @@
 #include <log4cplus/loggingmacros.h>
 
 #include <rapidxml/rapidxml.hpp>
+#include <rapidxml/rapidxml_utils.hpp>
 
 // declare log4cplus logger
 #define ZZLAB_USE_LOG4CPLUS(n) \
@@ -69,6 +70,7 @@ namespace zzlab
 	typedef rapidxml::xml_document<> XmlDocument;
 	typedef rapidxml::xml_node<> XmlNode;
 	typedef rapidxml::xml_attribute<> XmlAttribute;
+	typedef rapidxml::file<> XmlFile;
 
 	extern ZZLAB_API XmlDocument _Settings;
 

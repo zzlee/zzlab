@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Assets>
+	<Texture name="aa.png" path="Images/aa.png"/>
+	<Effect name="Unlit_YUV.fx" path="Effects/Unlit_YUV.fx"/>
+	<Effect name="Unlit.fx" path="Effects/Unlit.fx"/>
+	<Effect name="eb4.fx" path="Effects/eb4.fx"/>
+	<Effect name="eb4_grid.fx" path="Effects/eb4_grid.fx"/>
+	<Quad name="Quad"/>
+</Assets>

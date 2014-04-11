@@ -12,6 +12,8 @@
 #include <boost/bind.hpp>
 #include <boost/make_shared.hpp>
 
+#include <rapidxml/rapidxml_utils.hpp>
+
 ZZLAB_USE_LOG4CPLUS(zzav);
 
 using namespace boost;
@@ -440,23 +442,14 @@ namespace zzlab
 
 		static HWND sFocus = NULL;
 
-		void Device::load(XmlNode *node, LPDIRECT3D9EX d3d, int adapter, HWND hWnd, HWND hFocus)
+		void Device::load(XmlNode *node, HWND hWnd)
 		{
-			ZZLAB_INFO("Loading " << node->name() << ", 0x" << std::hex << hWnd <<
-				", 0x" << std::hex << hFocus << "...");
-
-			if (sFocus == NULL)
-				sFocus = hWnd;
-			if (hFocus == NULL)
-				hFocus = sFocus;
+			ZZLAB_INFO("Loading " << node->name() << ", 0x" << std::hex << hWnd << "...");
 
 			RECT rc;
 			GetWindowRect(hWnd, &rc);
 			int width = rc.right - rc.left;
 			int height = rc.bottom - rc.top;
-
-			if (adapter == -1)
-				adapter = adapterFromRegion(rc);
 
 			XmlAttribute *attr = node->first_attribute("back-buffer-width");
 			d3dpp.BackBufferWidth = attr ? atoi(attr->value()) : width;
@@ -492,9 +485,7 @@ namespace zzlab
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
-	d3dpp.MultiSampleType = x; \
-			else
+	if (_stricmp(attr->value(), # x) == 0) { d3dpp.MultiSampleType = x; } else
 
 				_MATCH(D3DMULTISAMPLE_NONE)
 					_MATCH(D3DMULTISAMPLE_NONMASKABLE)
@@ -633,26 +624,25 @@ namespace zzlab
 			else
 				d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 
-			DWORD behaviorFlags;
 			attr = node->first_attribute("behavior-flags");
 			if (attr)
 			{
 #define _MATCH(x) \
 	if (_stricmp(attr->value(), # x) == 0) \
-	behaviorFlags = x; \
+	mBehaviorFlags = x; \
 			else
 
 				_MATCH(D3DCREATE_SOFTWARE_VERTEXPROCESSING)
 					_MATCH(D3DCREATE_HARDWARE_VERTEXPROCESSING)
-					behaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+					mBehaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
 
 #undef _MATCH
 			}
 			else
-				behaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+				mBehaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
 
 			if (!d3dpp.Windowed)
-				behaviorFlags |= D3DCREATE_NOWINDOWCHANGES;
+				mBehaviorFlags |= D3DCREATE_NOWINDOWCHANGES;
 
 			d3ddm.Size = sizeof(D3DDISPLAYMODEEX);
 			d3ddm.Width = width;
@@ -677,25 +667,24 @@ namespace zzlab
 			else
 				d3ddm.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
 
-			D3DDEVTYPE deviceType;
 			attr = node->first_attribute("device-type");
 			if (attr)
 			{
 #define _MATCH(x) \
 	if (_stricmp(attr->value(), # x) == 0) \
-	deviceType = x; \
+	mDeviceType = x; \
 			else
 
 				_MATCH(D3DDEVTYPE_HAL)
 					_MATCH(D3DDEVTYPE_NULLREF)
 					_MATCH(D3DDEVTYPE_REF)
 					_MATCH(D3DDEVTYPE_SW)
-					deviceType = D3DDEVTYPE_HAL;
+					mDeviceType = D3DDEVTYPE_HAL;
 
 #undef _MATCH
 			}
 			else
-				deviceType = D3DDEVTYPE_HAL;
+				mDeviceType = D3DDEVTYPE_HAL;
 
 			attr = node->first_attribute("do-not-wait");
 			doNotWait = attr ? (_stricmp(attr->value(), "true") == 0 ? true : false) : false;
@@ -703,14 +692,30 @@ namespace zzlab
 			attr = node->first_attribute("rate");
 			if (attr)
 				rate = (float)atof(attr->value());
-
-			ZZLAB_INFO("Adapter: " << adapter);
-			dev = createDeviceEx(d3d, adapter, deviceType, hFocus, behaviorFlags, &d3dpp, d3dpp.Windowed ? NULL : &d3ddm);
 		}
 
-		void Device::init()
+		void Device::init(LPDIRECT3D9EX d3d, int adapter, HWND hFocus)
 		{
+			if (sFocus == NULL)
+				sFocus = d3dpp.hDeviceWindow;
+			if (hFocus == NULL)
+				hFocus = sFocus;
+
+			if (adapter == -1)
+			{
+				RECT rc;
+				GetWindowRect(d3dpp.hDeviceWindow, &rc);
+				adapter = adapterFromRegion(rc);
+			}
+
+			ZZLAB_INFO("Adapter: " << adapter);
+			dev = createDeviceEx(d3d, adapter, mDeviceType, hFocus, mBehaviorFlags, &d3dpp, d3dpp.Windowed ? NULL : &d3ddm);
+
 			resources = new gfx::ResourceManager();
+
+			IDirect3DSurface9* s;
+			HR(dev->GetRenderTarget(0, &s));
+			mBackBuffer = IDirect3DSurface9Ptr(s, false);
 
 			if (doNotWait)
 				mFlags = D3DPRESENT_DONOTWAIT;
@@ -795,6 +800,47 @@ namespace zzlab
 		}
 #include <boost/asio/unyield.hpp>
 
+		void loadAssets(d3d9::Device* dev, boost::filesystem::wpath path)
+		{
+			ZZLAB_INFO("Loading assets " << path.wstring() << " ...");
+
+			XmlFile file(path.string().c_str());
+
+			XmlDocument settings;
+			settings.parse<0>(file.data());
+
+			XmlNode* assets = settings.first_node("Assets");
+
+			for (XmlNode* node = assets->first_node("Texture"); node; node = node->next_sibling("Texture"))
+			{
+				d3d9::FileTextureResource* res = new d3d9::FileTextureResource();
+				res->dev = dev->dev;
+				res->deviceResourceEvents = &dev->deviceResourceEvents;
+				res->path = _AssetsPath / node->first_attribute("path")->value();
+				res->init();
+				dev->resources->set(node->first_attribute("name")->value(), res);
+			}
+
+			for (XmlNode* node = assets->first_node("Effect"); node; node = node->next_sibling("Effect"))
+			{
+				d3d9::EffectResource* res = new d3d9::EffectResource();
+				res->dev = dev->dev;
+				res->deviceResourceEvents = &dev->deviceResourceEvents;
+				res->path = _AssetsPath / node->first_attribute("path")->value();
+				res->init();
+				dev->resources->set(node->first_attribute("name")->value(), res);
+			}
+
+			for (XmlNode* node = assets->first_node("Quad"); node; node = node->next_sibling("Quad"))
+			{
+				d3d9::QuadMeshResource* res = new d3d9::QuadMeshResource();
+				res->dev = dev->dev;
+				res->deviceResourceEvents = &dev->deviceResourceEvents;
+				res->init();
+				dev->resources->set(node->first_attribute("name")->value(), res);
+			}
+		}
+
 		TextureResource::TextureResource() : deviceResourceEvents(NULL)
 		{
 			ZZLAB_TRACE_THIS();
@@ -819,7 +865,7 @@ namespace zzlab
 			reenter(__coro_main) for (;;)
 			{
 				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				texture = NULL;
+				resetResources();
 
 				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
 				initResources();
@@ -827,14 +873,28 @@ namespace zzlab
 		}
 #include <boost/asio/unyield.hpp>
 
-		void TextureResource::initResources()
+		FileTextureResource::FileTextureResource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		FileTextureResource::~FileTextureResource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void FileTextureResource::resetResources()
+		{
+			textures[0] = NULL;
+		}
+
+		void FileTextureResource::initResources()
 		{
 			ZZLAB_TRACE("Create texture from " << path.wstring());
-			texture = createTextureFromFile(dev, path.wstring().c_str());
+			textures[0] = createTextureFromFile(dev, path.wstring().c_str());
 		}
 
 		DynamicTextureResource::DynamicTextureResource() :
-			deviceResourceEvents(NULL),
 			width(256),
 			height(256),
 			format(D3DFMT_R8G8B8)
@@ -847,36 +907,20 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void DynamicTextureResource::init()
+		void DynamicTextureResource::resetResources()
 		{
-			initResources();
-
-			mEvent0.connect(bind(&DynamicTextureResource::main, this));
-			main();
+			texture = DynamicTexture();
+			textures[0] = NULL;
 		}
-
-#include <boost/asio/yield.hpp>
-		void DynamicTextureResource::main()
-		{
-			reenter(__coro_main) for (;;)
-			{
-				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				texture = DynamicTexture();
-
-				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
-				initResources();
-			}
-		}
-#include <boost/asio/unyield.hpp>
 
 		void DynamicTextureResource::initResources()
 		{
 			ZZLAB_TRACE("Create dynamic texture of " << width << 'x' << height << '@' << format);
 			texture = createDynamicTexture(dev, width, height, format);
+			textures[0] = texture.get<1>();
 		}
-		
+
 		DynamicYUVTextureResource::DynamicYUVTextureResource() :
-			deviceResourceEvents(NULL),
 			width(256),
 			height(256),
 			uvWidth(256),
@@ -890,14 +934,6 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void DynamicYUVTextureResource::init()
-		{
-			initResources();
-
-			mEvent0.connect(bind(&DynamicYUVTextureResource::main, this));
-			main();
-		}
-
 		void DynamicYUVTextureResource::update(AVFrame* frame)
 		{
 			updateYUVTexture(dev, texture,
@@ -908,25 +944,84 @@ namespace zzlab
 				));
 		}
 
-#include <boost/asio/yield.hpp>
-		void DynamicYUVTextureResource::main()
+		void DynamicYUVTextureResource::resetResources()
 		{
-			reenter(__coro_main) for (;;)
-			{
-				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				texture = YUVTexture();
-
-				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
-				initResources();
-			}
+			texture = YUVTexture();
+			textures[0] = textures[1] = textures[2] = NULL;
 		}
-#include <boost/asio/unyield.hpp>
 
 		void DynamicYUVTextureResource::initResources()
 		{
-			ZZLAB_TRACE("Create dynamic YUV texture, Y plane size: " << width << 'x' << height << 
+			ZZLAB_TRACE("Create dynamic YUV texture, Y plane size: " << width << 'x' << height <<
 				", UV plane size: " << uvWidth << 'x' << uvHeight);
 			texture = createYUVTexture(dev, width, height, uvWidth, uvHeight);
+			textures[0] = texture.get<0>().get<1>();
+			textures[1] = texture.get<1>().get<1>();
+			textures[2] = texture.get<2>().get<1>();
+		}
+
+		RenderTextureResource::RenderTextureResource() :
+			width(256),
+			height(256),
+			format(D3DFMT_X8R8G8B8)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		RenderTextureResource::~RenderTextureResource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void RenderTextureResource::resetResources()
+		{
+			surface = NULL;
+			textures[0] = NULL;
+		}
+
+		void RenderTextureResource::initResources()
+		{
+			textures[0] = createTexture(dev, width, height, 1, D3DUSAGE_RENDERTARGET, format);
+
+			IDirect3DSurface9* s;
+			textures[0]->GetSurfaceLevel(0, &s);
+			surface = IDirect3DSurface9Ptr(s, false);
+		}
+
+		RenderTexture::RenderTexture() : device(NULL)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		RenderTexture::~RenderTexture()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void RenderTexture::init()
+		{
+			dev = device->dev;
+			deviceResourceEvents = &device->deviceResourceEvents;
+			RenderTextureResource::init();
+
+			mFrameBeginDelegate.connect(bind(&RenderTexture::frameBegin, this));
+
+			device->rendererEvents.waitForFrameBegin(mFrameBeginDelegate());
+		}
+
+		void RenderTexture::frameBegin()
+		{
+			HR(dev->SetRenderTarget(0, surface));
+			rendererEvents.frameBegin();
+
+			HR(dev->BeginScene());
+			rendererEvents.draw();
+			HR(dev->EndScene());
+
+			rendererEvents.frameEnd();
+			device->restoreBackBuffer();
+
+			device->rendererEvents.waitForFrameBegin(mFrameBeginDelegate());
 		}
 
 		EffectResource::EffectResource() : deviceResourceEvents(NULL)
@@ -961,34 +1056,6 @@ namespace zzlab
 			}
 		}
 #include <boost/asio/unyield.hpp>
-
-		namespace detail
-		{
-			struct VERTEX_XYZ_UV0
-			{
-				D3DXVECTOR3 POSITION;
-				D3DXVECTOR2 UV0;
-
-				static IDirect3DVertexDeclaration9Ptr decl(LPDIRECT3DDEVICE9 dev)
-				{
-					static const D3DVERTEXELEMENT9 declaration[] =
-					{
-						{
-							0, 0,
-							D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0
-						},
-						{
-							0, sizeof(D3DXVECTOR3),
-							D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0
-						},
-						D3DDECL_END()
-					};
-
-					return createVertexDeclaration(dev, declaration);
-				}
-			};
-
-		}
 
 		MeshResource::MeshResource() : deviceResourceEvents(NULL)
 		{
@@ -1037,59 +1104,140 @@ namespace zzlab
 		void QuadMeshResource::initResources()
 		{
 			vertexBuffer = createVertexBuffer(dev,
-				4 * sizeof(detail::VERTEX_XYZ_UV0));
+				4 * sizeof(VERTEX_XYZ_UV0));
 			{
-				detail::VERTEX_XYZ_UV0 src[] =
+				VERTEX_XYZ_UV0 src[] =
 				{
+					{ D3DXVECTOR3(-0.5f, 0.5f, 0.0f), D3DXVECTOR2(0, 0) },
+					{ D3DXVECTOR3(0.5f, 0.5f, 0.0f), D3DXVECTOR2(1, 0) },
 					{ D3DXVECTOR3(-0.5f, -0.5f, 0.0f), D3DXVECTOR2(0, 1) },
 					{ D3DXVECTOR3(0.5f, -0.5f, 0.0f), D3DXVECTOR2(1, 1) },
-					{ D3DXVECTOR3(0.5f, 0.5f, 0.0f), D3DXVECTOR2(1, 0) },
-					{ D3DXVECTOR3(-0.5f, 0.5f, 0.0f), D3DXVECTOR2(0, 0) },
 				};
 
-				detail::VERTEX_XYZ_UV0 *dst;
+				VERTEX_XYZ_UV0 *dst;
 				vertexBuffer->Lock(0, 0, (void **)&dst, 0);
 
 				memcpy(dst, src, sizeof(src));
 
 				vertexBuffer->Unlock();
 			}
-			vertexDecl = detail::VERTEX_XYZ_UV0::decl(dev);
+			vertexDecl = VERTEX_XYZ_UV0::decl(dev);
 
-			indexBuffer = createIndexBuffer(dev, 3 * 2 * sizeof(int16_t));
+			indexBuffer = createIndexBuffer(dev, 6 * sizeof(int16_t));
 			{
 				int16_t *dst;
 				indexBuffer->Lock(0, 0, (void **)&dst, 0);
 
 				dst[0] = 0;
-				dst[1] = 2;
-				dst[2] = 1;
+				dst[1] = 1;
+				dst[2] = 2;
 
-				dst[3] = 0;
-				dst[4] = 3;
-				dst[5] = 2;
+				dst[3] = 2;
+				dst[4] = 1;
+				dst[5] = 3;
 
 				indexBuffer->Unlock();
 			}
 		}
 
-		inline static void drawQuad(IDirect3DDevice9Ex *dev, ID3DXEffect *effect)
+		inline static void drawTriangleList(IDirect3DDevice9Ex *dev, ID3DXEffect *effect, UINT NumVertices, UINT PrimitiveCount)
 		{
 			for (BeginEffect efx(effect); efx.more(); efx.next())
 			{
 				BeginEffect::Pass pass(efx);
 
-				dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2);
+				dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, NumVertices, 0, PrimitiveCount);
 			}
 		}
 
 		void QuadMeshResource::draw(ID3DXEffectPtr effect)
 		{
 			HR(dev->SetVertexDeclaration(vertexDecl));
-			HR(dev->SetStreamSource(0, vertexBuffer, 0, sizeof(detail::VERTEX_XYZ_UV0)));
+			HR(dev->SetStreamSource(0, vertexBuffer, 0, sizeof(VERTEX_XYZ_UV0)));
 			HR(dev->SetIndices(indexBuffer));
 
-			drawQuad(dev, effect);
+			drawTriangleList(dev, effect, 4, 2);
+		}
+
+		IDirect3DVertexDeclaration9Ptr VERTEX_XYZ_UV0::decl(LPDIRECT3DDEVICE9 dev)
+		{
+			static const D3DVERTEXELEMENT9 declaration[] =
+			{
+				{
+					0, 0,
+					D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0
+				},
+				{
+					0, sizeof(D3DXVECTOR3),
+					D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0
+				},
+				D3DDECL_END()
+			};
+
+			return createVertexDeclaration(dev, declaration);
+		}
+
+		LatticeMeshResource::LatticeMeshResource() : width(8), height(8), vertices(8 * 8)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		LatticeMeshResource::~LatticeMeshResource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void LatticeMeshResource::initResources()
+		{
+			vertexBuffer = createVertexBuffer(dev, vertices.size() * sizeof(VERTEX_XYZ_UV0));
+			updateVertices();
+
+			vertexDecl = VERTEX_XYZ_UV0::decl(dev);
+
+			indexBuffer = createIndexBuffer(dev, 6 * (width - 1) * (height - 1) * sizeof(int16_t));
+			{
+				int16_t *dst;
+				indexBuffer->Lock(0, 0, (void **)&dst, 0);
+
+				size_t stride = width - 1;
+				for (size_t x = 0; x < width - 1; ++x)
+				{
+					for (size_t y = 0; y < height - 1; ++y)
+					{
+						int16_t o = x + y * width;
+						int16_t *p = &dst[(x + y * stride) * 6];
+
+						p[0] = o + 0;
+						p[1] = o + 1;
+						p[2] = o + width * 1;
+
+						p[3] = p[2];
+						p[4] = p[1];
+						p[5] = p[3] + 1;
+					}
+				}
+
+				indexBuffer->Unlock();
+			}
+		}
+
+		void LatticeMeshResource::updateVertices()
+		{
+			VERTEX_XYZ_UV0 *dst;
+			vertexBuffer->Lock(0, 0, (void **)&dst, 0);
+
+			memcpy(dst, &vertices[0], vertices.size() * sizeof(VERTEX_XYZ_UV0));
+
+			vertexBuffer->Unlock();
+		}
+
+		void LatticeMeshResource::draw(ID3DXEffectPtr effect)
+		{
+			HR(dev->SetVertexDeclaration(vertexDecl));
+			HR(dev->SetStreamSource(0, vertexBuffer, 0, sizeof(VERTEX_XYZ_UV0)));
+			HR(dev->SetIndices(indexBuffer));
+
+			drawTriangleList(dev, effect, width * height, (width - 1) * (height - 1) * 2);
 		}
 
 		ClearScene::ClearScene() :
@@ -1110,18 +1258,63 @@ namespace zzlab
 
 		void ClearScene::init()
 		{
-			mDrawDelegate.connect(bind(&ClearScene::draw, this));
-			rendererEvents->waitForDraw(mDrawDelegate(), gfx::RendererEvents::LAYER_0);
+			mDelegate.connect(bind(&ClearScene::frameBegin, this));
+			rendererEvents->waitForFrameBegin(mDelegate());
 		}
 
-		void ClearScene::draw()
+		void ClearScene::frameBegin()
 		{
 			//ZZLAB_TRACE_THIS();
 
 			HR(dev->Clear(0, NULL, flags, color, Z, stencil));
+			rendererEvents->waitForFrameBegin(mDelegate());
+		}
+
+		eb4Renderer::eb4Renderer() : rendererEvents(NULL), effect(NULL), mainTex(NULL), horTex(NULL), verTex(NULL)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		eb4Renderer::~eb4Renderer()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void eb4Renderer::init()
+		{
+			gfx::Camera camera;
+			camera.proj = gfx::orthoLH(1.0f, 1.0f, 1.0f, 100.0f);
+			camera.updateT(
+				gfx::lookAtLH(
+				Eigen::Vector3f(0, 0, -10),
+				Eigen::Vector3f(0.0f, 0.0f, 0.0f),
+				Eigen::Vector3f::UnitY()));
+			Eigen::Affine3f t0 = Eigen::Affine3f::Identity() *
+				Eigen::Translation3f(-0.5f, -0.5f, 0.0f);
+			Eigen::Projective3f MATRIX_MVP = camera.matrix() * t0;
+			mMVP = MATRIX_MVP.matrix();
+
+			mDrawDelegate.connect(bind(&eb4Renderer::draw, this));
+
+			rendererEvents->waitForDraw(mDrawDelegate());
+		}
+
+		void eb4Renderer::draw()
+		{
+			//ZZLAB_TRACE_THIS();
+
+			effect->effect->SetMatrix("MATRIX_MVP", (const D3DXMATRIX *)mMVP.data());
+			if (mainTex)
+				effect->effect->SetTexture("MainTex", mainTex->textures[0]);
+			if (horTex)
+				effect->effect->SetTexture("HorBlend", horTex->textures[0]);
+			if (verTex)
+				effect->effect->SetTexture("VerBlend", verTex->textures[0]);
+
+			lattice->draw(effect->effect);
+
 			rendererEvents->waitForDraw(mDrawDelegate());
 		}
 
 	} // namespace d3d9
-
 } // namespace zzlab

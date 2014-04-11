@@ -37,6 +37,7 @@ namespace zzlab
 		_COM_SMARTPTR_TYPEDEF(IDirect3DVertexDeclaration9, __uuidof(IDirect3DVertexDeclaration9));
 		_COM_SMARTPTR_TYPEDEF(IDirect3DTexture9, __uuidof(IDirect3DTexture9));
 		_COM_SMARTPTR_TYPEDEF(IDirect3DIndexBuffer9, __uuidof(IDirect3DIndexBuffer9));
+		_COM_SMARTPTR_TYPEDEF(IDirect3DSurface9, __uuidof(IDirect3DSurface9));
 
 		_COM_SMARTPTR_TYPEDEF(ID3DXFont, IID_ID3DXFont);
 		_COM_SMARTPTR_TYPEDEF(ID3DXBuffer, IID_ID3DXBuffer);
@@ -251,8 +252,13 @@ namespace zzlab
 			explicit Device();
 			virtual ~Device();
 
-			void load(XmlNode *node, LPDIRECT3D9EX d3d, int adapter, HWND hWnd, HWND hFocus = NULL);
-			void init();
+			void load(XmlNode *node, HWND hWnd);
+			void init(LPDIRECT3D9EX d3d, int adapter = -1, HWND hFocus = NULL);
+
+			void restoreBackBuffer()
+			{
+				HR(dev->SetRenderTarget(0, mBackBuffer));
+			}
 
 			// NOITICE: access after init is called
 			IDirect3DDevice9ExPtr dev;
@@ -263,25 +269,30 @@ namespace zzlab
 		protected:
 			boost::asio::deadline_timer mTimer;
 
+			D3DDEVTYPE mDeviceType;
+			DWORD mBehaviorFlags;
 			DWORD mFlags;
 			size_t mDuration;
 			int64_t mFrameStart;
 
+			IDirect3DSurface9Ptr mBackBuffer;
+
 			boost::asio::coroutine __coro_main;
 			void main(boost::system::error_code error = boost::system::error_code());
 		};
+
+		ZZD3D9_API void loadAssets(d3d9::Device* dev, boost::filesystem::wpath path);
 
 		class ZZD3D9_API TextureResource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
 			gfx::DeviceResourceEvents* deviceResourceEvents;
-			boost::filesystem::wpath path;
 
-			IDirect3DTexture9Ptr texture;
+			IDirect3DTexture9Ptr textures[8];
 
-			TextureResource();
-			~TextureResource();
+			explicit TextureResource();
+			virtual ~TextureResource();
 
 			void init();
 
@@ -289,49 +300,63 @@ namespace zzlab
 			utils::SharedEvent0 mEvent0;
 			boost::asio::coroutine __coro_main;
 			void main();
-			void initResources();
+			virtual void resetResources() = 0;
+			virtual void initResources() = 0;
 		};
 
-		class ZZD3D9_API DynamicTextureResource : public gfx::Resource
+		class ZZD3D9_API FileTextureResource : public TextureResource
 		{
 		public:
-			IDirect3DDevice9ExPtr dev;
-			gfx::DeviceResourceEvents* deviceResourceEvents;
+			boost::filesystem::wpath path;
+
+			explicit FileTextureResource();
+			virtual ~FileTextureResource();
+
+		protected:
+			virtual void resetResources();
+			virtual void initResources();
+		};
+
+		class ZZD3D9_API DynamicTextureResource : public TextureResource
+		{
+		public:
 			int width;
 			int height;
 			D3DFORMAT format;
 
 			DynamicTexture texture;
 
-			DynamicTextureResource();
-			~DynamicTextureResource();
+			explicit DynamicTextureResource();
+			virtual ~DynamicTextureResource();
 
-			void init();
+			void update(const cv::Mat& mat)
+			{
+				updateDynamicTexture(dev, texture, mat);
+			}
+
+			void set(const cv::Scalar& v)
+			{
+				updateDynamicTexture(dev, texture, v);
+			}
 
 		protected:
-			utils::SharedEvent0 mEvent0;
-			boost::asio::coroutine __coro_main;
-			void main();
-			void initResources();
+			virtual void resetResources();
+			virtual void initResources();
 		};
 
-		class ZZD3D9_API DynamicYUVTextureResource : public gfx::Resource
+		class ZZD3D9_API DynamicYUVTextureResource : public TextureResource
 		{
 		public:
-			IDirect3DDevice9ExPtr dev;
-			gfx::DeviceResourceEvents* deviceResourceEvents;
 			int width;
 			int height;
-
 			int uvWidth;
 			int uvHeight;
 
 			YUVTexture texture;
 
-			DynamicYUVTextureResource();
-			~DynamicYUVTextureResource();
+			explicit DynamicYUVTextureResource();
+			virtual ~DynamicYUVTextureResource();
 
-			void init();
 			void update(AVFrame* frame);
 
 			void set(const ScalarYUV& yuv)
@@ -340,10 +365,43 @@ namespace zzlab
 			}
 
 		protected:
-			utils::SharedEvent0 mEvent0;
-			boost::asio::coroutine __coro_main;
-			void main();
-			void initResources();
+			virtual void resetResources();
+			virtual void initResources();
+		};
+
+		class ZZD3D9_API RenderTextureResource : public TextureResource
+		{
+		public:
+			int width;
+			int height;
+			D3DFORMAT format;
+
+			IDirect3DSurface9Ptr surface;
+
+			explicit RenderTextureResource();
+			virtual ~RenderTextureResource();
+
+		protected:
+			virtual void resetResources();
+			virtual void initResources();
+		};
+
+		class ZZD3D9_API RenderTexture : public RenderTextureResource
+		{
+		public:
+			Device* device;
+
+			gfx::RendererEvents rendererEvents;
+
+			explicit RenderTexture();
+			virtual ~RenderTexture();
+
+			void init();
+
+		protected:
+			utils::SharedEvent0 mFrameBeginDelegate;
+
+			void frameBegin();
 		};
 
 		class ZZD3D9_API EffectResource : public gfx::Resource
@@ -355,8 +413,8 @@ namespace zzlab
 
 			ID3DXEffectPtr effect;
 
-			EffectResource();
-			~EffectResource();
+			explicit EffectResource();
+			virtual ~EffectResource();
 
 			void init();
 
@@ -376,10 +434,11 @@ namespace zzlab
 			IDirect3DVertexDeclaration9Ptr vertexDecl;
 			IDirect3DIndexBuffer9Ptr indexBuffer;
 
-			MeshResource();
-			~MeshResource();
+			explicit MeshResource();
+			virtual ~MeshResource();
 
 			void init();
+			virtual void draw(ID3DXEffectPtr effect) = 0;
 
 		protected:
 			utils::SharedEvent0 mEvent0;
@@ -391,10 +450,41 @@ namespace zzlab
 		class ZZD3D9_API QuadMeshResource : public MeshResource
 		{
 		public:
-			QuadMeshResource();
-			~QuadMeshResource();
+			explicit QuadMeshResource();
+			virtual ~QuadMeshResource();
 
-			void draw(ID3DXEffectPtr effect);
+			virtual void draw(ID3DXEffectPtr effect);
+
+		protected:
+			virtual void initResources();
+		};
+
+		struct ZZD3D9_API VERTEX_XYZ_UV0
+		{
+			D3DXVECTOR3 POSITION;
+			D3DXVECTOR2 UV0;
+
+			static IDirect3DVertexDeclaration9Ptr decl(LPDIRECT3DDEVICE9 dev);
+		};
+
+		class ZZD3D9_API LatticeMeshResource : public MeshResource
+		{
+		public:
+			int width;
+			int height;
+
+			std::vector<VERTEX_XYZ_UV0> vertices;
+
+			explicit LatticeMeshResource();
+			virtual ~LatticeMeshResource();
+
+			void allocVertices()
+			{
+				vertices.resize(width * height);
+			}
+
+			void updateVertices();
+			virtual void draw(ID3DXEffectPtr effect);
 
 		protected:
 			virtual void initResources();
@@ -417,7 +507,30 @@ namespace zzlab
 			void init();
 
 		protected:
+			utils::SharedEvent0 mDelegate;
+
+			void frameBegin();
+		};
+
+		class ZZD3D9_API eb4Renderer
+		{
+		public:
+			gfx::RendererEvents* rendererEvents;
+			d3d9::EffectResource* effect;
+			d3d9::TextureResource* mainTex;
+			d3d9::TextureResource* horTex;
+			d3d9::TextureResource* verTex;
+			d3d9::MeshResource* lattice;
+
+			explicit eb4Renderer();
+			virtual ~eb4Renderer();
+
+			void init();
+
+		protected:
 			utils::SharedEvent0 mDrawDelegate;
+
+			Eigen::Matrix4f mMVP;
 
 			void draw();
 		};

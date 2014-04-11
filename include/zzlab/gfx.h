@@ -216,7 +216,7 @@ namespace zzlab
 			Eigen::Matrix4f mMatrix;
 		};
 
-		template<class T, class Traits, class PContext = Parallel> class Subdivision2D
+		template<class T, class Traits, class PContext = utils::Parallel> class Subdivision2D
 		{
 		public:
 			typedef T value_type;
