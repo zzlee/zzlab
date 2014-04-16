@@ -39,4 +39,8 @@
       <Filter>原始程式檔</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\props\zzlab_x64.props" />
+    <None Include="..\props\zzlab.props" />
+  </ItemGroup>
 </Project>

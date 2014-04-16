@@ -3,7 +3,6 @@
 #include "zzlab.h"
 #include "zzlab/av.h"
 #include "zzlab/utils.h"
-#include "zzlab/pystring.h"
 #include "zzlab/net.h"
 #include "zzlab/wx.h"
 #include "zzlab/d3d9.h"
@@ -14,6 +13,7 @@
 #include <boost/format.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "eb4.h"
 
@@ -64,27 +64,29 @@ static cv::Rect loadROI(XmlNode* node)
 {
 	cv::Rect roi;
 
-	XmlAttribute* attr = node->first_attribute("position");
+	XmlAttribute* attr = node->first_attribute(L"position");
 	if (attr)
 	{
-		std::vector<std::string> tokens;
-		pystring::split(attr->value(), tokens, ",");
+		std::wstring val = attr->value();
+		std::vector<std::wstring> tokens;
+		split(tokens, val, is_any_of(L","));
 		if (tokens.size() == 2)
 		{
-			roi.x = atoi(tokens[0].c_str());
-			roi.y = atoi(tokens[1].c_str());
+			roi.x = _wtoi(tokens[0].c_str());
+			roi.y = _wtoi(tokens[1].c_str());
 		}
 	}
 
-	attr = node->first_attribute("size");
+	attr = node->first_attribute(L"size");
 	if (attr)
 	{
-		std::vector<std::string> tokens;
-		pystring::split(attr->value(), tokens, ",");
+		std::wstring val = attr->value();
+		std::vector<std::wstring> tokens;
+		split(tokens, val, is_any_of(L","));
 		if (tokens.size() == 2)
 		{
-			roi.width = atoi(tokens[0].c_str());
-			roi.height = atoi(tokens[1].c_str());
+			roi.width = _wtoi(tokens[0].c_str());
+			roi.height = _wtoi(tokens[1].c_str());
 		}
 	}
 
@@ -115,16 +117,16 @@ static void getROI_YUV422P(AVFrame* src, AVFrame* dst, const cv::Rect& roi)
 	dst->linesize[2] = src->linesize[2];
 }
 
-struct FileNameMapping : public boost::unordered_map<std::string, boost::filesystem::wpath>
+struct FileNameMapping : public boost::unordered_map<std::wstring, boost::filesystem::wpath>
 {
 	void load(XmlNode* node)
 	{
 		filesystem::wpath root = _AssetsPath / "Videos";
 
-		for (XmlNode* file = node->first_node("File"); file; file = file->next_sibling("File"))
+		for (XmlNode* file = node->first_node(L"File"); file; file = file->next_sibling(L"File"))
 		{
-			insert(value_type(file->first_attribute("name")->value(),
-				root / file->first_attribute("dst")->value()));
+			insert(value_type(file->first_attribute(L"name")->value(),
+				root / file->first_attribute(L"dst")->value()));
 		}
 	}
 };
@@ -132,29 +134,29 @@ FileNameMapping _FileNameMapping;
 
 struct Cut {
 	size_t id;
-	std::string A;
-	std::string A_ending;
-	std::string A_fadeOut;
-	std::string A_clear;
-	std::string B;
-	std::string C;
-	std::string BC_ending;
-	std::string BC_fadeOut;
-	std::string BC_clear;
+	std::wstring A;
+	std::wstring A_ending;
+	std::wstring A_fadeOut;
+	std::wstring A_clear;
+	std::wstring B;
+	std::wstring C;
+	std::wstring BC_ending;
+	std::wstring BC_fadeOut;
+	std::wstring BC_clear;
 
 	void load(XmlNode* node)
 	{
-		A = node->first_attribute("A")->value();
-		A_ending = node->first_attribute("A-ending")->value();
-		A_fadeOut = node->first_attribute("A-fade-out")->value();
-		XmlAttribute* attr = node->first_attribute("A-clear");
-		A_clear = attr ? attr->value() : "1";
-		B = node->first_attribute("B")->value();
-		C = node->first_attribute("C")->value();
-		BC_ending = node->first_attribute("BC-ending")->value();
-		BC_fadeOut = node->first_attribute("BC-fade-out")->value();
-		attr = node->first_attribute("BC-clear");
-		BC_clear = attr ? attr->value() : "1";
+		A = node->first_attribute(L"A")->value();
+		A_ending = node->first_attribute(L"A-ending")->value();
+		A_fadeOut = node->first_attribute(L"A-fade-out")->value();
+		XmlAttribute* attr = node->first_attribute(L"A-clear");
+		A_clear = attr ? attr->value() : L"1";
+		B = node->first_attribute(L"B")->value();
+		C = node->first_attribute(L"C")->value();
+		BC_ending = node->first_attribute(L"BC-ending")->value();
+		BC_fadeOut = node->first_attribute(L"BC-fade-out")->value();
+		attr = node->first_attribute(L"BC-clear");
+		BC_clear = attr ? attr->value() : L"1";
 	}
 };
 
@@ -164,10 +166,10 @@ struct Schedule : public std::vector<Cut>
 
 	void load(XmlNode* node)
 	{
-		fadeOutLength = atof(node->first_attribute("fade-out-length")->value());
+		fadeOutLength = _wtof(node->first_attribute(L"fade-out-length")->value());
 
 		size_t id = 0;
-		for (XmlNode* cut = node->first_node("Cut"); cut; cut = cut->next_sibling("Cut"))
+		for (XmlNode* cut = node->first_node(L"Cut"); cut; cut = cut->next_sibling(L"Cut"))
 		{
 			push_back(Cut());
 			back().id = id++;
@@ -207,29 +209,31 @@ public:
 	{
 		t1 = Eigen::Affine3f::Identity();
 
-		XmlAttribute* attr = node->first_attribute("position");
+		XmlAttribute* attr = node->first_attribute(L"position");
 		if (attr)
 		{
-			std::vector<std::string> tokens;
-			pystring::split(attr->value(), tokens, ",");
+			std::wstring val = attr->value();
+			std::vector<std::wstring> tokens;
+			split(tokens, val, is_any_of(L","));
 			if (tokens.size() == 2)
 			{
 				t1 = t1 * Eigen::Translation3f(
-					atof(tokens[0].c_str()),
-					-atof(tokens[1].c_str()), 0.0f);
+					_wtof(tokens[0].c_str()),
+					-_wtof(tokens[1].c_str()), 0.0f);
 			}
 		}
 
-		attr = node->first_attribute("size");
+		attr = node->first_attribute(L"size");
 		if (attr)
 		{
-			std::vector<std::string> tokens;
-			pystring::split(attr->value(), tokens, ",");
+			std::wstring val = attr->value();
+			std::vector<std::wstring> tokens;
+			split(tokens, val, is_any_of(L","));
 			if (tokens.size() == 2)
 			{
 				t1 = t1 * Eigen::Scaling(
-					(float)atof(tokens[0].c_str()),
-					(float)atof(tokens[1].c_str()), 0.0f);
+					(float)_wtof(tokens[0].c_str()),
+					(float)_wtof(tokens[1].c_str()), 0.0f);
 			}
 		}
 	}
@@ -258,8 +262,13 @@ public:
 		rendererEvents->waitForDraw(mDrawDelegate());
 	}
 
+	void cancel()
+	{
+		mDrawDelegate.cancel();
+	}
+
 protected:
-	utils::SharedEvent0 mDrawDelegate;
+	utils::Delegate0 mDrawDelegate;
 
 	d3d9::QuadMeshResource* mQuad;
 	d3d9::EffectResource* mEffect;
@@ -289,7 +298,7 @@ static void dummy() {}
 class eb4Controller
 {
 public:
-	d3d9::Device* device;
+	d3d9::RenderDevice* device;
 
 	int width;
 	int height;
@@ -430,17 +439,16 @@ public:
 		}
 
 		{
-			XmlNode* x = node->first_node("grid-image");
+			XmlNode* x = node->first_node(L"grid-image");
 			mGridTex = new d3d9::DynamicTextureResource();
 			mGridTex->dev = device->dev;
-			mGridTex->deviceResourceEvents = &device->deviceResourceEvents;
 			mGridTex->width = width;
 			mGridTex->height = height;
 			mGridTex->format = D3DFMT_X8R8G8B8;
 			mGridTex->init();
 
-			mGridWidth = atoi(x->first_attribute("width")->value());
-			mGridHeight = atoi(x->first_attribute("height")->value());
+			mGridWidth = _wtoi(x->first_attribute(L"width")->value());
+			mGridHeight = _wtoi(x->first_attribute(L"height")->value());
 			mCanvas = cv::Mat4b(mGridTex->height, mGridTex->width);
 
 			updateCanvas();
@@ -448,7 +456,6 @@ public:
 
 		mHorTex = new d3d9::DynamicTextureResource();
 		mHorTex->dev = device->dev;
-		mHorTex->deviceResourceEvents = &device->deviceResourceEvents;
 		mHorTex->width = width;
 		mHorTex->height = 1;
 		mHorTex->format = D3DFMT_X8R8G8B8;
@@ -456,7 +463,6 @@ public:
 
 		mVerTex = new d3d9::DynamicTextureResource();
 		mVerTex->dev = device->dev;
-		mVerTex->deviceResourceEvents = &device->deviceResourceEvents;
 		mVerTex->width = height;
 		mVerTex->height = 1;
 		mVerTex->format = D3DFMT_X8R8G8B8;
@@ -491,7 +497,6 @@ public:
 
 		mLattice = new d3d9::LatticeMeshResource();
 		mLattice->dev = device->dev;
-		mLattice->deviceResourceEvents = &device->deviceResourceEvents;
 
 		// subdivision
 		{
@@ -521,11 +526,11 @@ public:
 
 		mLattice->init();
 
-		mBlendEffect = device->resources->get<d3d9::EffectResource>("eb4.fx");
-		mGridEffect = device->resources->get<d3d9::EffectResource>("eb4_grid.fx");
+		mBlendEffect = device->get<d3d9::EffectResource>(L"eb4.fx");
+		mGridEffect = device->get<d3d9::EffectResource>(L"eb4_grid.fx");
 
 		mRenderer = new d3d9::eb4Renderer();
-		mRenderer->rendererEvents = &device->rendererEvents;
+		mRenderer->rendererEvents = device;
 		mRenderer->effect = mBlendEffect;
 		mRenderer->mainTex = mainTex;
 		mRenderer->verTex = mVerTex;
@@ -1116,15 +1121,15 @@ public:
 			switch (event.GetCol())
 			{
 			case 1:
-				settings->set_blending(atof(val));
+				settings->set_blending(_wtof(val));
 				break;
 
 			case 2:
-				settings->set_gamma(atof(val));
+				settings->set_gamma(_wtof(val));
 				break;
 
 			case 3:
-				settings->set_center(atof(val));
+				settings->set_center(_wtof(val));
 				break;
 			}
 
@@ -1139,15 +1144,15 @@ public:
 			switch (event.GetCol())
 			{
 			case 1:
-				settings->set_blending(atof(val));
+				settings->set_blending(_wtof(val));
 				break;
 
 			case 2:
-				settings->set_gamma(atof(val));
+				settings->set_gamma(_wtof(val));
 				break;
 
 			case 3:
-				settings->set_center(atof(val));
+				settings->set_center(_wtof(val));
 				break;
 			}
 
@@ -1162,15 +1167,15 @@ public:
 			switch (event.GetCol())
 			{
 			case 1:
-				settings->set_blending(atof(val));
+				settings->set_blending(_wtof(val));
 				break;
 
 			case 2:
-				settings->set_gamma(atof(val));
+				settings->set_gamma(_wtof(val));
 				break;
 
 			case 3:
-				settings->set_center(atof(val));
+				settings->set_center(_wtof(val));
 				break;
 			}
 
@@ -1185,15 +1190,15 @@ public:
 			switch (event.GetCol())
 			{
 			case 1:
-				settings->set_blending(atof(val));
+				settings->set_blending(_wtof(val));
 				break;
 
 			case 2:
-				settings->set_gamma(atof(val));
+				settings->set_gamma(_wtof(val));
 				break;
 
 			case 3:
-				settings->set_center(atof(val));
+				settings->set_center(_wtof(val));
 				break;
 			}
 
@@ -1267,14 +1272,14 @@ public:
 
 			mClearScenes[i] = new d3d9::ClearScene();
 			mClearScenes[i]->dev = mDevices[i]->dev;
-			mClearScenes[i]->rendererEvents = &mDevices[i]->rendererEvents;
+			mClearScenes[i]->rendererEvents = mDevices[i];
 			mClearScenes[i]->init();
 
 			mRenderTextures[i] = new d3d9::RenderTexture();
 			mRenderTextures[i]->width = mDevices[i]->d3dpp.BackBufferWidth;
 			mRenderTextures[i]->height = mDevices[i]->d3dpp.BackBufferHeight;
 			mRenderTextures[i]->format = D3DFMT_X8R8G8B8;
-			mRenderTextures[i]->device = mDevices[i];
+			mRenderTextures[i]->renderDevice = mDevices[i];
 			mRenderTextures[i]->init();
 		}
 
@@ -1287,13 +1292,13 @@ public:
 		for (size_t i = 0; i < mVideoROIs.size(); ++i)
 		{
 			mQuadROIs[i] = loadROI(_Settings.first_node(
-				(boost::format("Quad%d") % i).str().c_str()));
+				(wformat(L"Quad%d") % i).str().c_str()));
 
 			mVideoROIs[i] = loadROI(_Settings.first_node(
-				(boost::format("VideoROI%d") % i).str().c_str()));
+				(wformat(L"VideoROI%d") % i).str().c_str()));
 
 			mLiveROIs[i] = loadROI(_Settings.first_node(
-				(boost::format("LiveROI%d") % i).str().c_str()));
+				(wformat(L"LiveROI%d") % i).str().c_str()));
 		}
 
 		initLiveQuad(1, 2);
@@ -1350,6 +1355,22 @@ public:
 			av_frame_free(&frame);
 	}
 
+	bool Destroy()
+	{
+		for (auto x : mWindows)
+		{
+			x->Destroy();
+		}
+
+		for (auto x : mQuads)
+		{
+			if (x)
+				x->cancel();
+		}
+
+		return wxFrame::Destroy();
+	}
+
 protected:
 	enum State
 	{
@@ -1362,7 +1383,7 @@ protected:
 
 	Cut* mCurrentCut;
 
-	boost::array<d3d9::Device*, 5> mDevices;
+	boost::array<d3d9::RenderDevice*, 5> mDevices;
 	boost::array<wxWindow*, 5> mWindows;
 	boost::array<d3d9::ClearScene*, 5> mClearScenes;
 
@@ -1419,7 +1440,7 @@ protected:
 	void initController(size_t i, size_t device_index)
 	{
 		mControlPanel->mControllers[i].node = _Settings.first_node(
-			(boost::format("EdgeBlend%d") % i).str().c_str());
+			(wformat(L"EdgeBlend%d") % i).str().c_str());
 		mControlPanel->mControllers[i].device = mDevices[device_index];
 		mControlPanel->mControllers[i].mainTex = mRenderTextures[device_index];
 
@@ -1444,22 +1465,22 @@ protected:
 		av::enumerateDevices(CLSID_VideoInputDeviceCategory, mks);
 		av::dumpMonikerFriendlyNames(mks);
 
-		XmlNode* node = _Settings.first_node("VideoCap0");
+		XmlNode* node = _Settings.first_node(L"VideoCap0");
 
 		mVideoCap.onFrame = bind(&MyFrame::onFrame, this, _1, _2);
 
-		XmlAttribute* attr = node->first_attribute("index");
-		mVideoCap.init(mks[atoi(attr->value())]);
+		XmlAttribute* attr = node->first_attribute(L"index");
+		mVideoCap.init(mks[_wtoi(attr->value())]);
 
-		attr = node->first_attribute("null-sync-source");
-		if (_stricmp(attr->value(), "true") == 0)
+		attr = node->first_attribute(L"null-sync-source");
+		if (_wcsicmp(attr->value(), L"true") == 0)
 			mVideoCap.setNullSyncSource();
 
-		attr = node->first_attribute("width");
-		int width = atoi(attr->value());
+		attr = node->first_attribute(L"width");
+		int width = _wtoi(attr->value());
 
-		attr = node->first_attribute("height");
-		int height = atoi(attr->value());
+		attr = node->first_attribute(L"height");
+		int height = _wtoi(attr->value());
 
 		mVideoCap.setFormat(width, height, MEDIASUBTYPE_YUY2);
 		mVideoCap.render();
@@ -1490,20 +1511,19 @@ protected:
 		renderVideoCap();
 	}
 
-	boost::tuple<d3d9::Device*, wxWindow*> createDevice(size_t i)
+	boost::tuple<d3d9::RenderDevice*, wxWindow*> createDevice(size_t i)
 	{
 		XmlNode* node = _Settings.first_node(
-			(boost::format("Window%d") % i).str().c_str());
+			(wformat(L"Window%d") % i).str().c_str());
 
 		wxTopLevelWindow* wnd = wx::loadWindow<wxTopLevelWindow>(node, this);
-		d3d9::Device* dev = new d3d9::Device();
+		d3d9::RenderDevice* dev = new d3d9::RenderDevice();
 
-		std::string devName = (boost::format("d3ddev%d") % i).str();
+		std::wstring devName = (wformat(L"d3ddev%d") % i).str();
 		node = _Settings.first_node(devName.c_str());
-		if (!node) node = _Settings.first_node("d3ddev");
+		if (!node) node = _Settings.first_node(L"d3ddev");
 
 		dev->load(node, (HWND)wnd->GetHandle());
-		dev->timeSource = _Timer;
 		dev->init(d3d9ex, -1, (HWND)GetHandle());
 
 		d3d9::loadAssets(dev, _DataPath / "assets.xml");
@@ -1526,7 +1546,9 @@ protected:
 		if (err)
 			return;
 
+#if 0
 		int ch = cv::waitKey(1);
+#endif
 
 		AVFrame* frame;
 		if (mAllocQ.pop(frame))
@@ -1652,14 +1674,14 @@ protected:
 		Cut* nextCut = &_Schedule[idx];		
 
 		int64_t playTime = _Timer->getTime();
-		if (!mCurrentCut || (_FileNameMapping[mCurrentCut->A].filename() == "LIVE") || (mCurrentCut->A != nextCut->A))
-			playA(_FileNameMapping[nextCut->A], playTime, nextCut->A_ending == "loop");
+		if (!mCurrentCut || (_FileNameMapping[mCurrentCut->A].filename() == L"LIVE") || (mCurrentCut->A != nextCut->A))
+			playA(_FileNameMapping[nextCut->A], playTime, nextCut->A_ending == L"loop");
 
 		if (!mCurrentCut || mCurrentCut->B != nextCut->B)
-			playB(_FileNameMapping[nextCut->B], playTime, nextCut->BC_ending == "loop");
+			playB(_FileNameMapping[nextCut->B], playTime, nextCut->BC_ending == L"loop");
 
 		if (!mCurrentCut || mCurrentCut->C != nextCut->C)
-			playC(_FileNameMapping[nextCut->C], playTime, nextCut->BC_ending == "loop");
+			playC(_FileNameMapping[nextCut->C], playTime, nextCut->BC_ending == L"loop");
 
 		mCurrentCut = nextCut;
 		ZZLAB_TRACE_VALUE(mCurrentCut->A_ending);
@@ -1683,7 +1705,7 @@ protected:
 
 		ZZLAB_INFO("All media players are stopped now.");
 
-		if (mCurrentCut->A_fadeOut == "1" || mCurrentCut->BC_fadeOut == "1")
+		if (mCurrentCut->A_fadeOut == L"1" || mCurrentCut->BC_fadeOut == L"1")
 		{
 			ZZLAB_TRACE("Fade out begins.");
 
@@ -1699,14 +1721,14 @@ protected:
 	{
 		D3DXCOLOR v(t, t, t, 1);
 
-		if (mCurrentCut->A_fadeOut == "1")
+		if (mCurrentCut->A_fadeOut == L"1")
 		{
 			mQuads[2]->diffuse = v;
 			mQuads[3]->diffuse = v;
 			mQuads[4]->diffuse = v;
 		}
 
-		if (mCurrentCut->BC_fadeOut == "1")
+		if (mCurrentCut->BC_fadeOut == L"1")
 		{
 			mQuads[0]->diffuse = v;
 			mQuads[1]->diffuse = v;
@@ -1740,7 +1762,7 @@ protected:
 
 	void afterFadeOut()
 	{
-		if (mCurrentCut->A_clear == "1")
+		if (mCurrentCut->A_clear == L"1")
 		{
 			mVideoTextures[2]->set(make_tuple(0, 128, 128));
 			mVideoTextures[3]->set(make_tuple(0, 128, 128));
@@ -1751,7 +1773,7 @@ protected:
 			mLiveVideoTextures[4]->set(make_tuple(0, 128, 128));
 		}
 
-		if (mCurrentCut->BC_clear == "1")
+		if (mCurrentCut->BC_clear == L"1")
 		{
 			mVideoTextures[0]->set(make_tuple(0, 128, 128));
 			mVideoTextures[1]->set(make_tuple(0, 128, 128));
@@ -1796,7 +1818,7 @@ protected:
 
 	void initVideoQuad(size_t device_index, size_t quad_index)
 	{
-		d3d9::Device* device = mDevices[device_index];
+		d3d9::RenderDevice* device = mDevices[device_index];
 		d3d9::RenderTexture* rtt = mRenderTextures[device_index];
 		const cv::Rect& roi = mVideoROIs[quad_index];
 
@@ -1806,17 +1828,16 @@ protected:
 		texture->height = roi.height;
 		texture->uvWidth = roi.width / 2;
 		texture->uvHeight = roi.height / 2;
-		texture->deviceResourceEvents = &device->deviceResourceEvents;
 		texture->init();
 		texture->set(d3d9::ScalarYUV(0, 128, 128));
 
 		VideoQuadRenderer* quad = new VideoQuadRenderer();	
-		quad->rendererEvents = &rtt->rendererEvents;
-		quad->mesh = device->resources->get<d3d9::QuadMeshResource>("Quad");
+		quad->rendererEvents = rtt;
+		quad->mesh = device->get<d3d9::QuadMeshResource>(L"Quad");
 		//quad->windowSize = mWindows[device_index]->GetSize();
-		quad->effect = device->resources->get<d3d9::EffectResource>("Unlit_YUV.fx");
+		quad->effect = device->get<d3d9::EffectResource>(L"Unlit_YUV.fx");
 		quad->texture = texture;
-		quad->load(_Settings.first_node((format("Quad%d") % quad_index).str().c_str()));
+		quad->load(_Settings.first_node((wformat(L"Quad%d") % quad_index).str().c_str()));
 		quad->init();
 
 		mVideoTextures[quad_index] = texture;
@@ -1831,7 +1852,7 @@ protected:
 
 	void initLiveQuad(size_t device_index, size_t quad_index)
 	{
-		d3d9::Device* device = mDevices[device_index];
+		d3d9::RenderDevice* device = mDevices[device_index];
 		d3d9::RenderTexture* rtt = mRenderTextures[device_index];
 		const cv::Rect& roi = mLiveROIs[quad_index];
 
@@ -1841,17 +1862,16 @@ protected:
 		texture->height = roi.height;
 		texture->uvWidth = roi.width / 2;
 		texture->uvHeight = roi.height;
-		texture->deviceResourceEvents = &device->deviceResourceEvents;
 		texture->init();
 		texture->set(d3d9::ScalarYUV(0, 128, 128));
 
 		VideoQuadRenderer* quad = new VideoQuadRenderer();
-		quad->rendererEvents = &rtt->rendererEvents;
-		quad->mesh = device->resources->get<d3d9::QuadMeshResource>("Quad");
-		quad->effect = device->resources->get<d3d9::EffectResource>("Unlit_YUV.fx");
+		quad->rendererEvents = rtt;
+		quad->mesh = device->get<d3d9::QuadMeshResource>(L"Quad");
+		quad->effect = device->get<d3d9::EffectResource>(L"Unlit_YUV.fx");
 		//quad->windowSize = mWindows[device_index]->GetSize();
 		quad->texture = texture;
-		quad->load(_Settings.first_node((format("Quad%d") % quad_index).str().c_str()));
+		quad->load(_Settings.first_node((wformat(L"Quad%d") % quad_index).str().c_str()));
 		quad->init();
 
 		mLiveVideoTextures[quad_index] = texture;
@@ -1865,10 +1885,10 @@ protected:
 		mp->timeSource = _Timer;
 		mp->audioDevice = _AudioDevice;
 		mp->loopPlay = loopPlay;
-		mp->load(_Settings.first_node("MediaPlayer0"));
+		mp->load(_Settings.first_node(L"MediaPlayer0"));
 		mp->init();
 
-		mp->getVideoRenderer()->rendererEvents = &mDevices[0]->rendererEvents;
+		mp->getVideoRenderer()->rendererEvents = mDevices[0];
 		switch (mp_index)
 		{
 		case 0:
@@ -1982,7 +2002,8 @@ protected:
 	void shutdown()
 	{
 		mVideoCap.stop();
-		utils::stopAllServices();
+		//gfx::stopRenderService();
+		zzlab::stopWorkerService();
 
 		Destroy();
 	}
@@ -2033,15 +2054,18 @@ bool MyApp::OnInit()
 	av::AudioDevice::dumpInfo();
 
 	d3d9ex = d3d9::createEx();
+	zzlab::startWorkerService();
+	//gfx::startRenderService();
+
 	_Timer = new utils::HiPerfTimer();
 	_AudioDevice = new av::AudioDevice();
-	_AudioDevice->load(_Settings.first_node("audio0"));
+	_AudioDevice->load(_Settings.first_node(L"audio0"));
 	_AudioDevice->outputParameters.sampleFormat = paFloat32;
 	_AudioDevice->init();
 	_AudioDevice->start();
 
-	_FileNameMapping.load(_Settings.first_node("FileNameMapping"));
-	_Schedule.load(_Settings.first_node("Schedule"));
+	_FileNameMapping.load(_Settings.first_node(L"FileNameMapping"));
+	_Schedule.load(_Settings.first_node(L"Schedule"));
 
 	MyFrame *frame = new MyFrame("Show Control", wxPoint(0, 0), wxSize(700, 440));
 	frame->Show(true);

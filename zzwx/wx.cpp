@@ -9,6 +9,7 @@
 
 #include <boost/asio/placeholders.hpp>
 #include <boost/bind.hpp>
+#include <boost/algorithm/string.hpp>
 
 ZZLAB_USE_LOG4CPLUS(zzwx);
 
@@ -58,6 +59,7 @@ namespace zzlab {
 		{
 			ZZLAB_TRACE_THIS();
 
+			zzlab::stopMainService();
 			zzlab::uninitialize();
 
 			return wxApp::OnExit();
@@ -82,7 +84,7 @@ namespace zzlab {
 		{
 			_MainService.post(boost::bind(&EventLoop::step, this, boost::system::error_code()));
 
-			utils::startAllServices();
+			zzlab::startMainService();
 
 			return m_exitcode;
 		}
@@ -137,11 +139,12 @@ namespace zzlab {
 			}
 			catch (...)
 			{
+				ZZLAB_ERROR("Exception is thrown.");
+
 				try
 				{
 					if (!wxTheApp || !wxTheApp->OnExceptionInMainLoop())
 					{
-						utils::stopAllServices();
 						OnExit();
 					}
 					//else: continue running the event loop
@@ -151,7 +154,6 @@ namespace zzlab {
 					// OnException() throwed, possibly rethrowing the same
 					// exception again: very good, but we still need OnExit() to
 					// be called
-					utils::stopAllServices();
 					OnExit();
 					throw;
 				}
@@ -210,8 +212,99 @@ namespace zzlab {
 				if (!hasMoreEvents)
 					break;
 			}
+		}
 
-			utils::stopAllServices();
+		void loadWindowSettings(XmlNode* node, wxString& title, wxPoint& position, wxSize& size, long& style)
+		{
+			ZZLAB_INFO("Loading " << node->name() << "...");
+
+			XmlAttribute *attr = node->first_attribute(L"title");
+			title = attr ? attr->value() : L"wxWindow";
+
+			attr = node->first_attribute(L"position");
+			if (attr)
+			{
+				std::wstring val = attr->value();
+				std::vector<std::wstring> tokens;
+				split(tokens, val, is_any_of(L","));
+
+				if (tokens.size() != 2)
+					position = wxDefaultPosition;
+				else
+				{
+					position.x = _wtoi(tokens[0].c_str());
+					position.y = _wtoi(tokens[1].c_str());
+				}
+			}
+			else
+				position = wxDefaultPosition;
+
+			attr = node->first_attribute(L"size");
+			if (attr)
+			{
+				std::wstring val = attr->value();
+				std::vector<std::wstring> tokens;
+				split(tokens, val, is_any_of(L","));
+
+				if (tokens.size() != 2)
+					size = wxDefaultSize;
+				else
+				{
+					size.x = _wtoi(tokens[0].c_str());
+					size.y = _wtoi(tokens[1].c_str());
+				}
+			}
+			else
+				size = wxDefaultSize;
+
+			style = 0;
+			attr = node->first_attribute(L"style");
+			if (attr)
+			{
+				std::wstring val = attr->value();
+
+				typedef split_iterator<std::wstring::iterator> wstring_split_iterator;
+				for (wstring_split_iterator It = make_split_iterator(val, first_finder(L"|", is_iequal()));
+					It != wstring_split_iterator(); ++It)
+				{
+					std::wstring s = copy_range<std::wstring>(*It);
+					trim(s);
+#define _MATCH(x) \
+	if (_wcsicmp(s.c_str(), _T(# x)) == 0) \
+	style |= x; \
+			else
+
+					_MATCH(wxBORDER_DEFAULT)
+						_MATCH(wxBORDER_SIMPLE)
+						_MATCH(wxBORDER_SUNKEN)
+						_MATCH(wxBORDER_RAISED)
+						_MATCH(wxBORDER_STATIC)
+						_MATCH(wxBORDER_THEME)
+						_MATCH(wxBORDER_NONE)
+						_MATCH(wxBORDER_DOUBLE)
+						_MATCH(wxTRANSPARENT_WINDOW)
+						_MATCH(wxCLIP_CHILDREN)
+						_MATCH(wxCAPTION)
+						_MATCH(wxDEFAULT_DIALOG_STYLE)
+						_MATCH(wxRESIZE_BORDER)
+						_MATCH(wxSTAY_ON_TOP)
+						_MATCH(wxDEFAULT_FRAME_STYLE)
+						_MATCH(wxICONIZE)
+						_MATCH(wxMINIMIZE)
+						_MATCH(wxMINIMIZE_BOX)
+						_MATCH(wxMAXIMIZE)
+						_MATCH(wxMAXIMIZE_BOX)
+						_MATCH(wxCLOSE_BOX)
+						_MATCH(wxSYSTEM_MENU)
+						_MATCH(wxFRAME_TOOL_WINDOW)
+						_MATCH(wxFRAME_NO_TASKBAR)
+						_MATCH(wxFRAME_FLOAT_ON_PARENT)
+						_MATCH(wxFRAME_SHAPED)
+						NULL;
+
+#undef _MATCH
+				}
+			}
 		}
 
 	} // namespace wx

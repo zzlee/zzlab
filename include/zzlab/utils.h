@@ -18,6 +18,7 @@ extern "C"
 
 #include <boost/thread/mutex.hpp>
 #include <boost/asio/deadline_timer.hpp>
+#include <boost/tuple/tuple.hpp>
 
 #include <tbb/tbb.h>
 
@@ -26,9 +27,6 @@ namespace zzlab
 	namespace utils
 	{
 		ZZUTILS_API void install(void);
-
-		ZZUTILS_API void startAllServices();
-		ZZUTILS_API void stopAllServices();
 
 		class ZZUTILS_API Timer
 		{
@@ -67,6 +65,17 @@ namespace zzlab
 			int64_t mNow;
 
 			int64_t mTime;
+		};
+
+		class ZZUTILS_API ManualTimer : public Timer
+		{
+		public:
+			int64_t now;
+
+			explicit ManualTimer();
+			~ManualTimer();
+
+			int64_t getTime();
 		};
 
 		// NOTICE: MUST use this class in _MainService
@@ -116,79 +125,73 @@ namespace zzlab
 		};
 
 		template<class T>
-		class Delegate
+		class Delegate : protected boost::shared_ptr<boost::function<T> >
 		{
+		public:
+			typedef boost::function<T> function_t;
+
 			explicit Delegate()
 			{
 			}
 
-			explicit Delegate(Delegate& se) : holder(se.holder)
+			template<class T1>
+			void connect(const T1& arg1)
 			{
+				reset(new function_t(boost::bind(arg1)));
 			}
 
-			explicit Delegate(const T& t) : holder(new holder_t(t))
+			template<class T1, class T2>
+			void connect(const T1& arg1, const T2& arg2)
 			{
+				reset(new function_t(boost::bind(arg1, arg2)));
 			}
 
-			void connect(const T& t)
+			template<class T1, class T2, class T3>
+			void connect(const T1& arg1, const T2& arg2, const T3& arg3)
 			{
-				if (holder)
-				{
-					holder_t t(holder);
+				reset(new function_t(boost::bind(arg1, arg2, arg3)));
+			}
 
-					t->m.lock();
-					holder.reset(new holder_t(t));
-					t->m.unock();
-				}
-				else
-					holder.reset(new holder_t(t));
+			template<class T1, class T2, class T3, class T4>
+			void connect(const T1& arg1, const T2& arg2, const T3& arg3, const T4& arg4)
+			{
+				reset(new function_t(boost::bind(arg1, arg2, arg3, arg4)));
+			}
+
+			template<class T1, class T2, class T3, class T4, class T5>
+			void connect(const T1& arg1, const T2& arg2, const T3& arg3, const T4& arg4, const T5& arg5)
+			{
+				reset(new function_t(boost::bind(arg1, arg2, arg3, arg4, arg5)));
+			}
+
+			template<class T1, class T2, class T3, class T4, class T5, class T6>
+			void connect(const T1& arg1, const T2& arg2, const T3& arg3, const T4& arg4, const T5& arg5, const T6& arg6)
+			{
+				reset(new function_t(boost::bind(arg1, arg2, arg3, arg4, arg5, arg6)));
 			}
 
 			void cancel()
 			{
-				if (holder)
-				{
-					holder_t t(holder);
-
-					t->m.lock();
-					holder.reset();
-					t->m.unock();
-				}
-				else
-					holder.reset();
+				reset();
 			}
 
-			T operator()()
+			function_t operator()()
 			{
-				return T(WeakRef(holder));
+				return function_t(WeakRef(*this));
 			}
 
 		protected:
-			struct holder_t
+			struct WeakRef : public boost::weak_ptr<function_t>
 			{
-				boost::mutex m;
-				T f;
-
-				holder_t(const T& t) : f(t)
-				{
-				}
-			};
-			typedef boost::shared_ptr<holder_t> holder_ptr;
-			holder_ptr holder;
-
-			struct WeakRef : public boost::weak_ptr<holder_t>
-			{
-				explicit WeakRef(const holder_ptr& ptr) : boost::weak_ptr<holder_t>(ptr)
+				explicit WeakRef(const boost::shared_ptr<function_t>& ptr) : boost::weak_ptr<function_t>(ptr)
 				{
 
 				}
 
 				void operator()()
 				{
-					if (boost::shared_ptr<T> t = lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)();
 					}
 				}
@@ -196,10 +199,8 @@ namespace zzlab
 				template<class T1>
 				void operator()(T1 arg1)
 				{
-					if (boost::shared_ptr<T> t = lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1);
 					}
 				}
@@ -207,10 +208,8 @@ namespace zzlab
 				template<class T1, class T2>
 				void operator()(T1 arg1, T2 arg2)
 				{
-					if (boost::shared_ptr<T> t = cb.lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1, arg2);
 					}
 				}
@@ -218,10 +217,8 @@ namespace zzlab
 				template<class T1, class T2, class T3>
 				void operator()(T1 arg1, T2 arg2, T3 arg3)
 				{
-					if (boost::shared_ptr<T> t = cb.lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1, arg2, arg3);
 					}
 				}
@@ -229,10 +226,8 @@ namespace zzlab
 				template<class T1, class T2, class T3, class T4>
 				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
 				{
-					if (boost::shared_ptr<T> t = cb.lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1, arg2, arg3, arg4);
 					}
 				}
@@ -240,10 +235,8 @@ namespace zzlab
 				template<class T1, class T2, class T3, class T4, class T5>
 				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
 				{
-					if (boost::shared_ptr<T> t = cb.lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1, arg2, arg3, arg4, arg5);
 					}
 				}
@@ -251,107 +244,106 @@ namespace zzlab
 				template<class T1, class T2, class T3, class T4, class T5, class T6>
 				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
 				{
-					if (boost::shared_ptr<T> t = cb.lock())
+					if (boost::shared_ptr<function_t> t = lock())
 					{
-						boost::mutex::scoped_lock l(t->m);
-
 						(*t)(arg1, arg2, arg3, arg4, arg5, arg6);
 					}
 				}
 			};
 		};
+		typedef Delegate<void()> Delegate0;
 
-		template<class T>
-		class SharedEvent
-		{
-		public:
-			explicit SharedEvent()
-			{
-			}
+		//template<class T>
+		//class SharedEvent
+		//{
+		//public:
+		//	explicit SharedEvent()
+		//	{
+		//	}
 
-			explicit SharedEvent(SharedEvent& se) : holder(se.holder)
-			{
-			}
+		//	explicit SharedEvent(SharedEvent& se) : holder(se.holder)
+		//	{
+		//	}
 
-			explicit SharedEvent(const T& t) : holder(new T(t))
-			{
-			}
+		//	explicit SharedEvent(const T& t) : holder(new T(t))
+		//	{
+		//	}
 
-			void connect(const T& t)
-			{
-				holder.reset(new T(t));
-			}
+		//	void connect(const T& t)
+		//	{
+		//		holder.reset(new T(t));
+		//	}
 
-			void cancel()
-			{
-				holder.reset();
-			}
+		//	void cancel()
+		//	{
+		//		holder.reset();
+		//	}
 
-			T operator()()
-			{
-				return T(WeakRef(holder));
-			}
+		//	T operator()()
+		//	{
+		//		return T(WeakRef(holder));
+		//	}
 
-		protected:
-			boost::shared_ptr<T> holder;
+		//protected:
+		//	boost::shared_ptr<T> holder;
 
-			struct WeakRef : public boost::weak_ptr<T>
-			{
-				explicit WeakRef(const boost::shared_ptr<T>& ptr) : boost::weak_ptr<T>(ptr)
-				{
+		//	struct WeakRef : public boost::weak_ptr<T>
+		//	{
+		//		explicit WeakRef(const boost::shared_ptr<T>& ptr) : boost::weak_ptr<T>(ptr)
+		//		{
 
-				}
+		//		}
 
-				void operator()()
-				{
-					if (boost::shared_ptr<T> t = lock())
-						(*t)();
-				}
+		//		void operator()()
+		//		{
+		//			if (boost::shared_ptr<T> t = lock())
+		//				(*t)();
+		//		}
 
-				template<class T1>
-				void operator()(T1 arg1)
-				{
-					if (boost::shared_ptr<T> t = lock())
-						(*t)(arg1);
-				}
+		//		template<class T1>
+		//		void operator()(T1 arg1)
+		//		{
+		//			if (boost::shared_ptr<T> t = lock())
+		//				(*t)(arg1);
+		//		}
 
-				template<class T1, class T2>
-				void operator()(T1 arg1, T2 arg2)
-				{
-					if (boost::shared_ptr<T> t = cb.lock())
-						(*t)(arg1, arg2);
-				}
+		//		template<class T1, class T2>
+		//		void operator()(T1 arg1, T2 arg2)
+		//		{
+		//			if (boost::shared_ptr<T> t = cb.lock())
+		//				(*t)(arg1, arg2);
+		//		}
 
-				template<class T1, class T2, class T3>
-				void operator()(T1 arg1, T2 arg2, T3 arg3)
-				{
-					if (boost::shared_ptr<T> t = cb.lock())
-						(*t)(arg1, arg2, arg3);
-				}
+		//		template<class T1, class T2, class T3>
+		//		void operator()(T1 arg1, T2 arg2, T3 arg3)
+		//		{
+		//			if (boost::shared_ptr<T> t = cb.lock())
+		//				(*t)(arg1, arg2, arg3);
+		//		}
 
-				template<class T1, class T2, class T3, class T4>
-				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
-				{
-					if (boost::shared_ptr<T> t = cb.lock())
-						(*t)(arg1, arg2, arg3, arg4);
-				}
+		//		template<class T1, class T2, class T3, class T4>
+		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
+		//		{
+		//			if (boost::shared_ptr<T> t = cb.lock())
+		//				(*t)(arg1, arg2, arg3, arg4);
+		//		}
 
-				template<class T1, class T2, class T3, class T4, class T5>
-				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
-				{
-					if (boost::shared_ptr<T> t = cb.lock())
-						(*t)(arg1, arg2, arg3, arg4, arg5);
-				}
+		//		template<class T1, class T2, class T3, class T4, class T5>
+		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
+		//		{
+		//			if (boost::shared_ptr<T> t = cb.lock())
+		//				(*t)(arg1, arg2, arg3, arg4, arg5);
+		//		}
 
-				template<class T1, class T2, class T3, class T4, class T5, class T6>
-				void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
-				{
-					if (boost::shared_ptr<T> t = cb.lock())
-						(*t)(arg1, arg2, arg3, arg4, arg5, arg6);
-				}
-			};
-		};
-		typedef SharedEvent<boost::function<void()> > SharedEvent0;
+		//		template<class T1, class T2, class T3, class T4, class T5, class T6>
+		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
+		//		{
+		//			if (boost::shared_ptr<T> t = cb.lock())
+		//				(*t)(arg1, arg2, arg3, arg4, arg5, arg6);
+		//		}
+		//	};
+		//};
+		//typedef SharedEvent<boost::function<void()> > SharedEvent0;
 
 		template<class T>
 		class AsyncEvents

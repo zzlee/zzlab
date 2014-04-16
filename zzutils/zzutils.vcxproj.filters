@@ -27,9 +27,6 @@
     <ClInclude Include="..\include\zzlab\utils.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\zzlab\pystring.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -39,9 +36,6 @@
       <Filter>原始程式檔</Filter>
     </ClCompile>
     <ClCompile Include="utils.cpp">
-      <Filter>原始程式檔</Filter>
-    </ClCompile>
-    <ClCompile Include="pystring.cpp">
       <Filter>原始程式檔</Filter>
     </ClCompile>
   </ItemGroup>

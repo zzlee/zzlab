@@ -4,13 +4,14 @@
 #include "stdafx.h"
 
 #include "zzlab/d3d9.h"
-#include "zzlab/pystring.h"
 #include <limits>
 
 #include <boost/system/error_code.hpp>
 #include <boost/asio/placeholders.hpp>
 #include <boost/bind.hpp>
 #include <boost/make_shared.hpp>
+#include <boost/locale.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <rapidxml/rapidxml_utils.hpp>
 
@@ -420,29 +421,34 @@ namespace zzlab
 			HR(_impl.mEffect->EndPass());
 		}
 
-		Device::Device() :
-			timeSource(NULL),
-			resources(NULL),
-			doNotWait(true),
-			rate(240.0f),
-			mTimer(_MainService)
+		RenderDevice::RenderDevice() :
+			mTimer(*gfx::_RenderService)
+		{
+			ZZLAB_TRACE_THIS();
+
+			ZeroMemory(&d3dpp, sizeof(d3dpp));
+			d3dpp.BackBufferFormat = D3DFMT_X8R8G8B8;
+			d3dpp.BackBufferCount = 1;
+			d3dpp.MultiSampleType = D3DMULTISAMPLE_NONE;
+			d3dpp.MultiSampleQuality = 0;
+			d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+			d3dpp.Windowed = TRUE;
+			d3dpp.EnableAutoDepthStencil = TRUE;
+			d3dpp.AutoDepthStencilFormat = D3DFMT_D24S8;
+			d3dpp.Flags = 0;
+			d3dpp.FullScreen_RefreshRateInHz = 0;
+			d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+
+			deviceType = D3DDEVTYPE_HAL;
+			scanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+		}
+
+		RenderDevice::~RenderDevice()
 		{
 			ZZLAB_TRACE_THIS();
 		}
 
-		Device::~Device()
-		{
-			ZZLAB_TRACE_THIS();
-
-			mTimer.cancel();
-
-			if (resources)
-				delete resources;
-		}
-
-		static HWND sFocus = NULL;
-
-		void Device::load(XmlNode *node, HWND hWnd)
+		void RenderDevice::load(XmlNode *node, HWND hWnd)
 		{
 			ZZLAB_INFO("Loading " << node->name() << ", 0x" << std::hex << hWnd << "...");
 
@@ -451,17 +457,17 @@ namespace zzlab
 			int width = rc.right - rc.left;
 			int height = rc.bottom - rc.top;
 
-			XmlAttribute *attr = node->first_attribute("back-buffer-width");
-			d3dpp.BackBufferWidth = attr ? atoi(attr->value()) : width;
+			XmlAttribute *attr = node->first_attribute(L"back-buffer-width");
+			d3dpp.BackBufferWidth = attr ? _wtoi(attr->value()) : width;
 
-			attr = node->first_attribute("back-buffer-height");
-			d3dpp.BackBufferHeight = attr ? atoi(attr->value()) : height;
+			attr = node->first_attribute(L"back-buffer-height");
+			d3dpp.BackBufferHeight = attr ? _wtoi(attr->value()) : height;
 
-			attr = node->first_attribute("back-buffer-format");
+			attr = node->first_attribute(L"back-buffer-format");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
 	d3dpp.BackBufferFormat = x; \
 			else
 
@@ -478,14 +484,14 @@ namespace zzlab
 			else
 				d3dpp.BackBufferFormat = D3DFMT_X8R8G8B8;
 
-			attr = node->first_attribute("back-buffer-count");
-			d3dpp.BackBufferCount = attr ? atoi(attr->value()) : 1;
+			attr = node->first_attribute(L"back-buffer-count");
+			d3dpp.BackBufferCount = attr ? _wtoi(attr->value()) : 1;
 
-			attr = node->first_attribute("multi-sample-type");
+			attr = node->first_attribute(L"multi-sample-type");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) { d3dpp.MultiSampleType = x; } else
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) { d3dpp.MultiSampleType = x; } else
 
 				_MATCH(D3DMULTISAMPLE_NONE)
 					_MATCH(D3DMULTISAMPLE_NONMASKABLE)
@@ -511,14 +517,14 @@ namespace zzlab
 			else
 				d3dpp.MultiSampleType = D3DMULTISAMPLE_NONE;
 
-			attr = node->first_attribute("multi-sample-quality");
-			d3dpp.MultiSampleQuality = attr ? atoi(attr->value()) : 0;
+			attr = node->first_attribute(L"multi-sample-quality");
+			d3dpp.MultiSampleQuality = attr ? _wtoi(attr->value()) : 0;
 
-			attr = node->first_attribute("swap-effect");
+			attr = node->first_attribute(L"swap-effect");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
 	d3dpp.SwapEffect = x; \
 			else
 
@@ -535,16 +541,16 @@ namespace zzlab
 				d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
 
 			d3dpp.hDeviceWindow = hWnd;
-			attr = node->first_attribute("windowed");
-			d3dpp.Windowed = attr ? (_stricmp(attr->value(), "true") == 0 ? TRUE : FALSE) : FALSE;
-			attr = node->first_attribute("enable-auto-depth-stencil");
-			d3dpp.EnableAutoDepthStencil = attr ? (_stricmp(attr->value(), "true") == 0 ? TRUE : FALSE) : FALSE;
+			attr = node->first_attribute(L"windowed");
+			d3dpp.Windowed = attr ? (_wcsicmp(attr->value(), L"true") == 0 ? TRUE : FALSE) : FALSE;
+			attr = node->first_attribute(L"enable-auto-depth-stencil");
+			d3dpp.EnableAutoDepthStencil = attr ? (_wcsicmp(attr->value(), L"true") == 0 ? TRUE : FALSE) : FALSE;
 
-			attr = node->first_attribute("auto-depth-stencil-format");
+			attr = node->first_attribute(L"auto-depth-stencil-format");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
 	d3dpp.AutoDepthStencilFormat = x; \
 			else
 
@@ -557,24 +563,28 @@ namespace zzlab
 					_MATCH(D3DFMT_D16)
 					_MATCH(D3DFMT_D32F_LOCKABLE)
 					_MATCH(D3DFMT_D24FS8)
-					d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
+					d3dpp.AutoDepthStencilFormat = D3DFMT_D24S8;
 
 #undef _MATCH
 			}
 			else
-				d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
+				d3dpp.AutoDepthStencilFormat = D3DFMT_D24S8;
 
 			d3dpp.Flags = 0;
-			attr = node->first_attribute("flags");
+			attr = node->first_attribute(L"flags");
 			if (attr)
 			{
-				std::vector<std::string> tokens;
-				pystring::split(attr->value(), tokens, "|");
-				for (std::vector<std::string>::const_iterator i = tokens.begin(); i != tokens.end(); ++i)
+				std::wstring val = attr->value();
+
+				typedef split_iterator<std::wstring::iterator> wstring_split_iterator;
+				for (wstring_split_iterator It = make_split_iterator(val, first_finder(L"|", is_iequal()));
+					It != wstring_split_iterator(); ++It)
 				{
-					std::string s = pystring::strip(*i);
+					std::wstring s = copy_range<std::wstring>(*It);
+					trim(s);
+
 #define _MATCH(x) \
-	if (_stricmp(s.c_str(), # x) == 0) \
+	if (_wcsicmp(s.c_str(),_T( # x)) == 0) \
 	d3dpp.Flags |= x; \
 			else
 
@@ -595,19 +605,14 @@ namespace zzlab
 				}
 			}
 
-			if (d3dpp.Windowed)
-				d3dpp.FullScreen_RefreshRateInHz = 0;
-			else
-			{
-				attr = node->first_attribute("refresh-rate");
-				d3dpp.FullScreen_RefreshRateInHz = attr ? atoi(attr->value()) : 1;
-			}
+			attr = node->first_attribute(L"refresh-rate");
+			d3dpp.FullScreen_RefreshRateInHz = attr ? _wtoi(attr->value()) : 0;
 
-			attr = node->first_attribute("presentation-interval");
+			attr = node->first_attribute(L"presentation-interval");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
 	d3dpp.PresentationInterval = x; \
 			else
 
@@ -624,78 +629,66 @@ namespace zzlab
 			else
 				d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 
-			attr = node->first_attribute("behavior-flags");
+			attr = node->first_attribute(L"behavior-flags");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
-	mBehaviorFlags = x; \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
+	behaviorFlags = x; \
 			else
 
 				_MATCH(D3DCREATE_SOFTWARE_VERTEXPROCESSING)
 					_MATCH(D3DCREATE_HARDWARE_VERTEXPROCESSING)
-					mBehaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+					behaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
 
 #undef _MATCH
 			}
 			else
-				mBehaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+				behaviorFlags = D3DCREATE_SOFTWARE_VERTEXPROCESSING;
 
-			if (!d3dpp.Windowed)
-				mBehaviorFlags |= D3DCREATE_NOWINDOWCHANGES;
-
-			d3ddm.Size = sizeof(D3DDISPLAYMODEEX);
-			d3ddm.Width = width;
-			d3ddm.Height = height;
-			d3ddm.RefreshRate = d3dpp.FullScreen_RefreshRateInHz;
-			d3ddm.Format = d3dpp.BackBufferFormat;
-
-			attr = node->first_attribute("scan-line-ordering");
+			attr = node->first_attribute(L"scan-line-ordering");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
-	d3ddm.ScanLineOrdering = x; \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
+	scanLineOrdering = x; \
 			else
 
 				_MATCH(D3DSCANLINEORDERING_PROGRESSIVE)
 					_MATCH(D3DSCANLINEORDERING_INTERLACED)
-					d3ddm.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+					scanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
 
 #undef _MATCH
 			}
 			else
-				d3ddm.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+				scanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
 
-			attr = node->first_attribute("device-type");
+			attr = node->first_attribute(L"device-type");
 			if (attr)
 			{
 #define _MATCH(x) \
-	if (_stricmp(attr->value(), # x) == 0) \
-	mDeviceType = x; \
+	if (_wcsicmp(attr->value(), _T( # x )) == 0) \
+	deviceType = x; \
 			else
 
 				_MATCH(D3DDEVTYPE_HAL)
 					_MATCH(D3DDEVTYPE_NULLREF)
 					_MATCH(D3DDEVTYPE_REF)
 					_MATCH(D3DDEVTYPE_SW)
-					mDeviceType = D3DDEVTYPE_HAL;
+					deviceType = D3DDEVTYPE_HAL;
 
 #undef _MATCH
 			}
 			else
-				mDeviceType = D3DDEVTYPE_HAL;
-
-			attr = node->first_attribute("do-not-wait");
-			doNotWait = attr ? (_stricmp(attr->value(), "true") == 0 ? true : false) : false;
-
-			attr = node->first_attribute("rate");
-			if (attr)
-				rate = (float)atof(attr->value());
+				deviceType = D3DDEVTYPE_HAL;
 		}
 
-		void Device::init(LPDIRECT3D9EX d3d, int adapter, HWND hFocus)
+		void RenderDevice::init(LPDIRECT3D9EX d3d, int adapter, HWND hFocus)
 		{
+			ZZLAB_TRACE_THIS();
+
+			static HWND sFocus = NULL;
+
 			if (sFocus == NULL)
 				sFocus = d3dpp.hDeviceWindow;
 			if (hFocus == NULL)
@@ -708,99 +701,79 @@ namespace zzlab
 				adapter = adapterFromRegion(rc);
 			}
 
-			ZZLAB_INFO("Adapter: " << adapter);
-			dev = createDeviceEx(d3d, adapter, mDeviceType, hFocus, mBehaviorFlags, &d3dpp, d3dpp.Windowed ? NULL : &d3ddm);
+			ZZLAB_INFO("Use adapter: " << adapter);
 
-			resources = new gfx::ResourceManager();
+			DWORD behaviorFlags_ = behaviorFlags;
+			if (!d3dpp.Windowed)
+				behaviorFlags_ |= D3DCREATE_NOWINDOWCHANGES;
+
+			D3DPRESENT_PARAMETERS tmp = d3dpp;
+			if (tmp.Windowed)
+				tmp.FullScreen_RefreshRateInHz = 0;
+
+			D3DDISPLAYMODEEX d3ddm;
+			d3ddm.Size = sizeof(D3DDISPLAYMODEEX);
+			d3ddm.Width = d3dpp.BackBufferWidth;
+			d3ddm.Height = d3dpp.BackBufferHeight;
+			d3ddm.RefreshRate = d3dpp.FullScreen_RefreshRateInHz;
+			d3ddm.Format = d3dpp.BackBufferFormat;
+			d3ddm.ScanLineOrdering = scanLineOrdering;
+
+			dev = createDeviceEx(d3d, adapter, deviceType, hFocus, behaviorFlags_, &tmp, tmp.Windowed ? NULL : &d3ddm);
 
 			IDirect3DSurface9* s;
 			HR(dev->GetRenderTarget(0, &s));
 			mBackBuffer = IDirect3DSurface9Ptr(s, false);
 
-			if (doNotWait)
-				mFlags = D3DPRESENT_DONOTWAIT;
-			else
-				mFlags = 0;
-
-			mDuration = size_t(1000 / rate);
-
-			// yield
-			mTimer.expires_from_now(posix_time::milliseconds(0));
-			mTimer.async_wait(boost::bind(&Device::main, this, asio::placeholders::error));
+			mMainDelegate.connect(&RenderDevice::main, this, asio::placeholders::error);
+			gfx::_RenderService->post(boost::bind(mMainDelegate(), system::error_code()));
 		}
 
-#include <boost/asio/yield.hpp>
-		void Device::main(boost::system::error_code error)
+		void RenderDevice::reset()
+		{
+			D3DPRESENT_PARAMETERS tmp = d3dpp;
+
+			if (d3dpp.Windowed)
+			{
+				tmp.FullScreen_RefreshRateInHz = 0;
+				HR(dev->ResetEx(&tmp, NULL));
+			}
+			else
+			{
+				D3DDISPLAYMODEEX d3ddm;
+				d3ddm.Size = sizeof(D3DDISPLAYMODEEX);
+				d3ddm.Width = d3dpp.BackBufferWidth;
+				d3ddm.Height = d3dpp.BackBufferHeight;
+				d3ddm.RefreshRate = d3dpp.FullScreen_RefreshRateInHz;
+				d3ddm.Format = d3dpp.BackBufferFormat;
+				d3ddm.ScanLineOrdering = scanLineOrdering;
+
+				HR(dev->ResetEx(&tmp, &d3ddm));
+			}
+		}
+
+		void RenderDevice::main(boost::system::error_code error)
 		{
 			if (error)
 				return;
 
-			HRESULT hr;
-			D3DPRESENT_PARAMETERS tmp;
-			D3DDISPLAYMODEEX tmp1;
-			int64_t diff;
+			frameBegin();
 
-			reenter(__coro_main) for (;;)
-			{
-				mFrameStart = timeSource->getTimeInMicroseconds();
-				rendererEvents.frameBegin();
+			HR(dev->BeginScene());
+			draw();
+			HR(dev->EndScene());
 
-				HR(dev->BeginScene());
-				rendererEvents.draw();
-				HR(dev->EndScene());
+			HR(dev->PresentEx(NULL, NULL, NULL, NULL, 0));
 
-				for (;;)
-				{
-					hr = dev->PresentEx(NULL, NULL, NULL, NULL, mFlags);
-					if (SUCCEEDED(hr))
-						break;
+			frameEnd();
 
-					if (hr == D3DERR_DEVICELOST)
-					{
-						ZZLAB_INFO("D3D9 device lost");
-						deviceResourceEvents.deviceLost();
-
-						// try to reset device
-						for (;;)
-						{
-							hr = dev->TestCooperativeLevel();
-							if (hr == D3DERR_DEVICENOTRESET)
-							{
-								ZZLAB_INFO("Try to reset D3D9 device");
-
-								tmp = d3dpp;
-								tmp1 = d3ddm;
-								hr = dev->ResetEx(&tmp, &tmp1);
-								if (SUCCEEDED(hr))
-								{
-									deviceResourceEvents.deviceReset();
-
-									break;
-								}
-							}
-
-							mTimer.expires_from_now(posix_time::milliseconds(100));
-							yield mTimer.async_wait(boost::bind(&Device::main, this, asio::placeholders::error));
-						}
-					}
-
-					// wait awhile and then try another presentation
-					mTimer.expires_from_now(posix_time::milliseconds(mDuration / 4));
-					yield mTimer.async_wait(boost::bind(&Device::main, this, asio::placeholders::error));
-				}
-
-				rendererEvents.frameEnd();
-
-				diff = timeSource->getTimeInMicroseconds() - mFrameStart;
-
-				// wait rest of time
-				mTimer.expires_from_now(posix_time::microseconds(mDuration * 1000 - diff));
-				yield mTimer.async_wait(boost::bind(&Device::main, this, asio::placeholders::error));
-			}
+			mTimer.expires_from_now(posix_time::microseconds(4));
+			mTimer.async_wait(mMainDelegate());
 		}
-#include <boost/asio/unyield.hpp>
 
-		void loadAssets(d3d9::Device* dev, boost::filesystem::wpath path)
+		void loadAssets(IDirect3DDevice9ExPtr dev,
+			gfx::ResourceManager* resources,
+			boost::filesystem::wpath path)
 		{
 			ZZLAB_INFO("Loading assets " << path.wstring() << " ...");
 
@@ -809,39 +782,36 @@ namespace zzlab
 			XmlDocument settings;
 			settings.parse<0>(file.data());
 
-			XmlNode* assets = settings.first_node("Assets");
+			XmlNode* assets = settings.first_node(L"Assets");
 
-			for (XmlNode* node = assets->first_node("Texture"); node; node = node->next_sibling("Texture"))
+			for (XmlNode* node = assets->first_node(L"Texture"); node; node = node->next_sibling(L"Texture"))
 			{
 				d3d9::FileTextureResource* res = new d3d9::FileTextureResource();
-				res->dev = dev->dev;
-				res->deviceResourceEvents = &dev->deviceResourceEvents;
-				res->path = _AssetsPath / node->first_attribute("path")->value();
+				res->dev = dev;
+				res->path = _AssetsPath / node->first_attribute(L"path")->value();
 				res->init();
-				dev->resources->set(node->first_attribute("name")->value(), res);
+				resources->set(node->first_attribute(L"name")->value(), res);
 			}
 
-			for (XmlNode* node = assets->first_node("Effect"); node; node = node->next_sibling("Effect"))
+			for (XmlNode* node = assets->first_node(L"Effect"); node; node = node->next_sibling(L"Effect"))
 			{
 				d3d9::EffectResource* res = new d3d9::EffectResource();
-				res->dev = dev->dev;
-				res->deviceResourceEvents = &dev->deviceResourceEvents;
-				res->path = _AssetsPath / node->first_attribute("path")->value();
+				res->dev = dev;
+				res->path = _AssetsPath / node->first_attribute(L"path")->value();
 				res->init();
-				dev->resources->set(node->first_attribute("name")->value(), res);
+				resources->set(node->first_attribute(L"name")->value(), res);
 			}
 
-			for (XmlNode* node = assets->first_node("Quad"); node; node = node->next_sibling("Quad"))
+			for (XmlNode* node = assets->first_node(L"Quad"); node; node = node->next_sibling(L"Quad"))
 			{
 				d3d9::QuadMeshResource* res = new d3d9::QuadMeshResource();
-				res->dev = dev->dev;
-				res->deviceResourceEvents = &dev->deviceResourceEvents;
+				res->dev = dev;
 				res->init();
-				dev->resources->set(node->first_attribute("name")->value(), res);
+				resources->set(node->first_attribute(L"name")->value(), res);
 			}
 		}
 
-		TextureResource::TextureResource() : deviceResourceEvents(NULL)
+		TextureResource::TextureResource()
 		{
 			ZZLAB_TRACE_THIS();
 		}
@@ -854,24 +824,7 @@ namespace zzlab
 		void TextureResource::init()
 		{
 			initResources();
-
-			mEvent0.connect(bind(&TextureResource::main, this));
-			main();
 		}
-
-#include <boost/asio/yield.hpp>
-		void TextureResource::main()
-		{
-			reenter(__coro_main) for (;;)
-			{
-				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				resetResources();
-
-				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
-				initResources();
-			}
-		}
-#include <boost/asio/unyield.hpp>
 
 		FileTextureResource::FileTextureResource()
 		{
@@ -881,11 +834,6 @@ namespace zzlab
 		FileTextureResource::~FileTextureResource()
 		{
 			ZZLAB_TRACE_THIS();
-		}
-
-		void FileTextureResource::resetResources()
-		{
-			textures[0] = NULL;
 		}
 
 		void FileTextureResource::initResources()
@@ -905,12 +853,6 @@ namespace zzlab
 		DynamicTextureResource::~DynamicTextureResource()
 		{
 			ZZLAB_TRACE_THIS();
-		}
-
-		void DynamicTextureResource::resetResources()
-		{
-			texture = DynamicTexture();
-			textures[0] = NULL;
 		}
 
 		void DynamicTextureResource::initResources()
@@ -944,12 +886,6 @@ namespace zzlab
 				));
 		}
 
-		void DynamicYUVTextureResource::resetResources()
-		{
-			texture = YUVTexture();
-			textures[0] = textures[1] = textures[2] = NULL;
-		}
-
 		void DynamicYUVTextureResource::initResources()
 		{
 			ZZLAB_TRACE("Create dynamic YUV texture, Y plane size: " << width << 'x' << height <<
@@ -973,12 +909,6 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void RenderTextureResource::resetResources()
-		{
-			surface = NULL;
-			textures[0] = NULL;
-		}
-
 		void RenderTextureResource::initResources()
 		{
 			textures[0] = createTexture(dev, width, height, 1, D3DUSAGE_RENDERTARGET, format);
@@ -988,7 +918,7 @@ namespace zzlab
 			surface = IDirect3DSurface9Ptr(s, false);
 		}
 
-		RenderTexture::RenderTexture() : device(NULL)
+		RenderTexture::RenderTexture() : renderDevice(NULL)
 		{
 			ZZLAB_TRACE_THIS();
 		}
@@ -1000,31 +930,30 @@ namespace zzlab
 
 		void RenderTexture::init()
 		{
-			dev = device->dev;
-			deviceResourceEvents = &device->deviceResourceEvents;
+			dev = renderDevice->dev;
 			RenderTextureResource::init();
 
-			mFrameBeginDelegate.connect(bind(&RenderTexture::frameBegin, this));
+			mFrameBeginDelegate.connect(bind(&RenderTexture::onFrameBegin, this));
 
-			device->rendererEvents.waitForFrameBegin(mFrameBeginDelegate());
+			renderDevice->waitForFrameBegin(mFrameBeginDelegate());
 		}
 
-		void RenderTexture::frameBegin()
+		void RenderTexture::onFrameBegin()
 		{
 			HR(dev->SetRenderTarget(0, surface));
-			rendererEvents.frameBegin();
+			frameBegin();
 
 			HR(dev->BeginScene());
-			rendererEvents.draw();
+			draw();
 			HR(dev->EndScene());
 
-			rendererEvents.frameEnd();
-			device->restoreBackBuffer();
+			frameEnd();
+			renderDevice->restoreBackBuffer();
 
-			device->rendererEvents.waitForFrameBegin(mFrameBeginDelegate());
+			renderDevice->waitForFrameBegin(mFrameBeginDelegate());
 		}
 
-		EffectResource::EffectResource() : deviceResourceEvents(NULL)
+		EffectResource::EffectResource()
 		{
 			ZZLAB_TRACE_THIS();
 		}
@@ -1038,26 +967,9 @@ namespace zzlab
 		{
 			ZZLAB_TRACE("Create effect from " << path.wstring());
 			effect = createEffectFromFile(dev, path.wstring().c_str());
-
-			mEvent0.connect(bind(&EffectResource::main, this));
-			main();
 		}
 
-#include <boost/asio/yield.hpp>
-		void EffectResource::main()
-		{
-			reenter(__coro_main) for (;;)
-			{
-				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				effect->OnLostDevice();
-
-				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
-				effect->OnResetDevice();
-			}
-		}
-#include <boost/asio/unyield.hpp>
-
-		MeshResource::MeshResource() : deviceResourceEvents(NULL)
+		MeshResource::MeshResource()
 		{
 			ZZLAB_TRACE_THIS();
 		}
@@ -1070,26 +982,7 @@ namespace zzlab
 		void MeshResource::init()
 		{
 			initResources();
-
-			mEvent0.connect(bind(&MeshResource::main, this));
-			main();
 		}
-
-#include <boost/asio/yield.hpp>
-		void MeshResource::main()
-		{
-			reenter(__coro_main) for (;;)
-			{
-				yield deviceResourceEvents->waitForDeviceLost(mEvent0());
-				vertexBuffer = NULL;
-				vertexDecl = NULL;
-				indexBuffer = NULL;
-
-				yield deviceResourceEvents->waitForDeviceReset(mEvent0());
-				initResources();
-			}
-		}
-#include <boost/asio/unyield.hpp>
 
 		QuadMeshResource::QuadMeshResource()
 		{

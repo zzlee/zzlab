@@ -42,22 +42,6 @@ namespace zzlab {
 			addPlugin(plugin);
 		}
 
-		void startAllServices()
-		{
-			ZZLAB_TRACE_FUNCTION();
-
-			zzlab::startWorkerService();
-			zzlab::startMainService();
-		}
-
-		void stopAllServices()
-		{
-			ZZLAB_TRACE_FUNCTION();
-
-			zzlab::stopWorkerService();
-			zzlab::stopMainService();
-		}
-
 		const int64_t Timer::timeUnit = 10000000;
 		const double Timer::fTimeUnit = 10000000;
 		const AVRational Timer::rTimeUnitQ = { 1, 10000000 };
@@ -92,6 +76,21 @@ namespace zzlab {
 		{
 			QueryPerformanceCounter((LARGE_INTEGER *)&mNow);
 			return (mNow - mBegin) * timeUnit / sFrequency;
+		}
+
+		ManualTimer::ManualTimer() : now(0)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		ManualTimer::~ManualTimer()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		int64_t ManualTimer::getTime()
+		{
+			return now;
 		}
 
 		RealTimeManager::RealTimeManager(Timer& timeSource) :

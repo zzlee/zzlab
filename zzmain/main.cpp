@@ -118,9 +118,9 @@ namespace zzlab
 				ZZLAB_ERROR("Failed to initialize plugin: " << p.name);
 		}
 
-		filesystem::wpath settingPath = (_DataPath / "settings.xml");
+		filesystem::wpath settingPath = (_DataPath / L"settings.xml");
 		ZZLAB_INFO("Loading " << settingPath.wstring() << " ...");
-		settingsFile = new rapidxml::file<>(settingPath.string().c_str()); // Default template is char
+		settingsFile = new XmlFile(settingPath.string().c_str());
 		_Settings.parse<0>(settingsFile->data());
 
 		initialized = true;
@@ -157,30 +157,15 @@ namespace zzlab
 
 	static void workerInit(size_t i)
 	{
-		// set worker thread affinity to cores other than core 1
-		SetThreadAffinityMask(GetCurrentThread(), 0xFFFFFFFF ^ 1);
-
 		ZZLAB_INFO("Worker thread started.");
 		_WorkerService.run();
 		ZZLAB_INFO("Worker thread stopped.");
 	}
 
-	class IdleForever
-	{
-	public:
-		IdleForever();
-		~IdleForever();
-
-		void init();
-
-	protected:
-		asio::deadline_timer mTimer;
-		void main(boost::system::error_code err = boost::system::error_code());
-	};
 	static IdleForever* workerIdle = NULL;
 
-	IdleForever::IdleForever() :
-		mTimer(_WorkerService)
+	IdleForever::IdleForever(boost::asio::io_service& io_service) :
+		mTimer(io_service)
 	{
 		ZZLAB_TRACE_THIS();
 	}
@@ -206,7 +191,7 @@ namespace zzlab
 
 	void startWorkerService(size_t workerThreads)
 	{
-		ZZLAB_TRACE_FUNCTION1(L": workerThread=" << workerThreads);
+		ZZLAB_TRACE_FUNCTION();
 
 		if (workerServiceRunning)
 		{
@@ -214,13 +199,11 @@ namespace zzlab
 		}
 		else
 		{
-			workerIdle = new IdleForever();
-			workerIdle->init();
-
 			if (workerThreads == 0) 
-			{
 				workerThreads = thread::hardware_concurrency();
-			}
+
+			workerIdle = new IdleForever(_WorkerService);
+			workerIdle->init();
 
 			ZZLAB_INFO("Create " << workerThreads << " threads for worker service.");
 			for (size_t i = 0; i < workerThreads; ++i)
@@ -250,7 +233,7 @@ namespace zzlab
 		}
 		else
 		{
-			ZZLAB_WARN("Wroker service is NOT running.");
+			ZZLAB_WARN("Worker service is NOT running.");
 		}
 	}
 

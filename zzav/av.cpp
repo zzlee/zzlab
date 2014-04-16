@@ -348,29 +348,29 @@ namespace zzlab
 
 		void FileMediaPlayer::load(XmlNode* node, AudioDevice* audioDevice)
 		{
-			XmlAttribute* attr = node->first_attribute("video-decoder-threads");
+			XmlAttribute* attr = node->first_attribute(L"video-decoder-threads");
 			if (attr)
-				videoDecoderThreads = atoi(attr->value());
+				videoDecoderThreads = _wtoi(attr->value());
 
-			attr = node->first_attribute("video-queue-size");
+			attr = node->first_attribute(L"video-queue-size");
 			if (attr)
-				videoQueueSize = atoi(attr->value());
+				videoQueueSize = _wtoi(attr->value());
 
-			attr = node->first_attribute("video-drop-tolerance");
+			attr = node->first_attribute(L"video-drop-tolerance");
 			if (attr)
-				videoDropTolerance = atoi(attr->value()) * utils::Timer::timeUnit;
+				videoDropTolerance = _wtoi(attr->value()) * utils::Timer::timeUnit;
 
 			outChannelLayout = av_get_default_channel_layout(audioDevice->outputParameters.channelCount);
 			outSampleRate = (int)audioDevice->sampleRate;
 			outFormat = cvtSampleFormat(audioDevice->outputParameters.sampleFormat);
 
-			attr = node->first_attribute("audio-queue-size");
+			attr = node->first_attribute(L"audio-queue-size");
 			if (attr)
-				audioQueueSize = atoi(attr->value());
+				audioQueueSize = _wtoi(attr->value());
 
-			attr = node->first_attribute("audio-drop-tolerance");
+			attr = node->first_attribute(L"audio-drop-tolerance");
 			if (attr)
-				audioDropTolerance = atoi(attr->value()) * utils::Timer::timeUnit;
+				audioDropTolerance = _wtoi(attr->value()) * utils::Timer::timeUnit;
 		}
 
 		void FileMediaPlayer::init()
@@ -778,38 +778,38 @@ namespace zzlab
 			if (node == NULL)
 				return false;
 
-			XmlAttribute* attr = node->first_attribute("sapmle-rate");
+			XmlAttribute* attr = node->first_attribute(L"sapmle-rate");
 			if (attr)
 			{
-				sampleRate = (float)atof(attr->value());
+				sampleRate = (float)_wtof(attr->value());
 			}
 
-			XmlNode* param = node->first_node("input");
+			XmlNode* param = node->first_node(L"input");
 			if (param)
 			{
-				attr = param->first_attribute("device-index");
+				attr = param->first_attribute(L"device-index");
 				if (attr)
-					inputParameters.device = atoi(attr->value());
+					inputParameters.device = _wtoi(attr->value());
 
-				attr = param->first_attribute("channel-count");
+				attr = param->first_attribute(L"channel-count");
 				if (attr)
-					inputParameters.channelCount = atoi(attr->value());
+					inputParameters.channelCount = _wtoi(attr->value());
 			}
 			else
 			{
 				inputParameters.device = paNoDevice;
 			}
 
-			param = node->first_node("output");
+			param = node->first_node(L"output");
 			if (param)
 			{
-				attr = param->first_attribute("device-index");
+				attr = param->first_attribute(L"device-index");
 				if (attr)
-					outputParameters.device = atoi(attr->value());
+					outputParameters.device = _wtoi(attr->value());
 
-				attr = param->first_attribute("channel-count");
+				attr = param->first_attribute(L"channel-count");
 				if (attr)
-					outputParameters.channelCount = atoi(attr->value());
+					outputParameters.channelCount = _wtoi(attr->value());
 			}
 			else
 			{

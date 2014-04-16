@@ -6,14 +6,104 @@
 #include "zzlab/gfx.h"
 
 #include <boost/bind.hpp>
+#include <boost/thread.hpp>
 
 ZZLAB_USE_LOG4CPLUS(zzgfx);
+
+using namespace boost;
 
 namespace zzlab
 {
 	namespace gfx
 	{
+		ZZGFX_API boost::asio::io_service* _RenderService = NULL;
+
+		static bool initialize()
+		{
+			ZZLAB_TRACE_FUNCTION();
+
+			_RenderService = &_MainService;
+
+			return true;
+		}
+
+		static void uninitialize()
+		{
+			ZZLAB_TRACE_FUNCTION();
+		}
+
+		void install(void)
+		{
+			Plugin plugin = {
+				L"zzgfx", initialize, uninitialize
+			};
+
+			addPlugin(plugin);
+		}
+
 		static void dummy() {};
+
+		static bool renderServiceRunning = false;
+		static boost::thread* renderThread = nullptr;
+		static IdleForever* idle = nullptr;
+
+		static void _ioservice()
+		{
+			ZZLAB_INFO("Render thread started.");
+			_RenderService->run();
+			ZZLAB_INFO("Render thread stopped.");
+		}
+
+		ZZGFX_API void startRenderService()
+		{
+			if (renderServiceRunning)
+			{
+				ZZLAB_WARN("Render service is RUNNING.");
+			}
+			else
+			{
+				ZZLAB_TRACE_FUNCTION();
+
+				_RenderService = new asio::io_service();
+
+				idle = new IdleForever(*_RenderService);
+				idle->init();
+
+				renderThread = new boost::thread(bind(_ioservice));
+
+				renderServiceRunning = true;
+
+				ZZLAB_INFO("Render service started.");
+			}
+		}
+
+		ZZGFX_API void stopRenderService()
+		{
+			ZZLAB_TRACE_FUNCTION();
+
+			if (renderServiceRunning)
+			{
+				_RenderService->stop();
+				renderThread->join();
+
+				renderServiceRunning = false;
+
+				delete idle;
+				idle = nullptr;
+
+				delete renderThread;
+				renderThread = nullptr;
+
+				delete _RenderService;
+				_RenderService = &_MainService;
+
+				ZZLAB_INFO("Render service stopped.");
+			}
+			else
+			{
+				ZZLAB_WARN("Render service is NOT running.");
+			}
+		}
 
 		RendererEvents::RendererEvents()
 		{
@@ -46,16 +136,6 @@ namespace zzlab
 			}
 		}
 
-		DeviceResourceEvents::DeviceResourceEvents()
-		{
-			ZZLAB_TRACE_THIS();
-		}
-
-		DeviceResourceEvents::~DeviceResourceEvents()
-		{
-			ZZLAB_TRACE_THIS();
-		}
-
 		Resource::Resource()
 		{
 			ZZLAB_TRACE_THIS();
@@ -78,7 +158,7 @@ namespace zzlab
 			clear();
 		}
 
-		void ResourceManager::set(const std::string &name, Resource* obj)
+		void ResourceManager::set(const std::wstring &name, Resource* obj)
 		{
 			pool_t::iterator i = mPool.find(name);
 			if (i != mPool.end())
@@ -90,7 +170,7 @@ namespace zzlab
 				mPool[name] = obj;
 		}
 
-		Resource* ResourceManager::remove(const std::string &name)
+		Resource* ResourceManager::remove(const std::wstring &name)
 		{
 			pool_t::iterator i = mPool.find(name);
 			if (i != mPool.end())

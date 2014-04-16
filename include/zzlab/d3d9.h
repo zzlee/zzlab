@@ -240,54 +240,69 @@ namespace zzlab
 			UINT mCurrentPass;
 		};
 
-		class ZZD3D9_API Device
+		class ZZD3D9_API RenderDevice : public gfx::ResourceManager, public gfx::RendererEvents
 		{
 		public:
 			D3DPRESENT_PARAMETERS d3dpp;
-			D3DDISPLAYMODEEX d3ddm;
-			bool doNotWait;
-			float rate;
-			utils::Timer* timeSource; // used in do-not-wait mode
+			D3DDEVTYPE deviceType;
+			DWORD behaviorFlags;
+			D3DSCANLINEORDERING scanLineOrdering;
 
-			explicit Device();
-			virtual ~Device();
+			explicit RenderDevice();
+			~RenderDevice();
 
 			void load(XmlNode *node, HWND hWnd);
 			void init(LPDIRECT3D9EX d3d, int adapter = -1, HWND hFocus = NULL);
+
+			// NOTICE: access after init is called
+			IDirect3DDevice9ExPtr dev;
+
+			void cancel()
+			{
+				mMainDelegate.cancel();
+			}
+
+			void reset();
 
 			void restoreBackBuffer()
 			{
 				HR(dev->SetRenderTarget(0, mBackBuffer));
 			}
 
-			// NOITICE: access after init is called
-			IDirect3DDevice9ExPtr dev;
-			gfx::RendererEvents rendererEvents;
-			gfx::DeviceResourceEvents deviceResourceEvents;
-			gfx::ResourceManager* resources;
+			void setFullscreen(bool fullScreen)
+			{
+				d3dpp.Windowed = fullScreen ? FALSE : TRUE;
+				reset();
+			}
+
+			void toggleFullscreen()
+			{
+				d3dpp.Windowed = !d3dpp.Windowed;
+				reset();
+			}
 
 		protected:
 			boost::asio::deadline_timer mTimer;
 
-			D3DDEVTYPE mDeviceType;
-			DWORD mBehaviorFlags;
-			DWORD mFlags;
-			size_t mDuration;
-			int64_t mFrameStart;
-
 			IDirect3DSurface9Ptr mBackBuffer;
 
-			boost::asio::coroutine __coro_main;
+			utils::Delegate<void(boost::system::error_code)> mMainDelegate;
 			void main(boost::system::error_code error = boost::system::error_code());
 		};
+		
+		ZZD3D9_API void loadAssets(IDirect3DDevice9ExPtr dev,
+			gfx::ResourceManager* resources,
+			boost::filesystem::wpath path);
 
-		ZZD3D9_API void loadAssets(d3d9::Device* dev, boost::filesystem::wpath path);
+		inline void loadAssets(d3d9::RenderDevice* renderDevice, boost::filesystem::wpath path)
+		{
+			loadAssets(renderDevice->dev, renderDevice, path);
+		}
 
 		class ZZD3D9_API TextureResource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
-			gfx::DeviceResourceEvents* deviceResourceEvents;
 
 			IDirect3DTexture9Ptr textures[8];
 
@@ -297,10 +312,6 @@ namespace zzlab
 			void init();
 
 		protected:
-			utils::SharedEvent0 mEvent0;
-			boost::asio::coroutine __coro_main;
-			void main();
-			virtual void resetResources() = 0;
 			virtual void initResources() = 0;
 		};
 
@@ -313,7 +324,6 @@ namespace zzlab
 			virtual ~FileTextureResource();
 
 		protected:
-			virtual void resetResources();
 			virtual void initResources();
 		};
 
@@ -340,7 +350,6 @@ namespace zzlab
 			}
 
 		protected:
-			virtual void resetResources();
 			virtual void initResources();
 		};
 
@@ -365,7 +374,6 @@ namespace zzlab
 			}
 
 		protected:
-			virtual void resetResources();
 			virtual void initResources();
 		};
 
@@ -382,16 +390,13 @@ namespace zzlab
 			virtual ~RenderTextureResource();
 
 		protected:
-			virtual void resetResources();
 			virtual void initResources();
 		};
 
-		class ZZD3D9_API RenderTexture : public RenderTextureResource
+		class ZZD3D9_API RenderTexture : public RenderTextureResource, public gfx::RendererEvents
 		{
 		public:
-			Device* device;
-
-			gfx::RendererEvents rendererEvents;
+			RenderDevice* renderDevice;
 
 			explicit RenderTexture();
 			virtual ~RenderTexture();
@@ -399,16 +404,15 @@ namespace zzlab
 			void init();
 
 		protected:
-			utils::SharedEvent0 mFrameBeginDelegate;
+			utils::Delegate0 mFrameBeginDelegate;
 
-			void frameBegin();
+			void onFrameBegin();
 		};
 
 		class ZZD3D9_API EffectResource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
-			gfx::DeviceResourceEvents* deviceResourceEvents;
 			boost::filesystem::wpath path;
 
 			ID3DXEffectPtr effect;
@@ -417,18 +421,12 @@ namespace zzlab
 			virtual ~EffectResource();
 
 			void init();
-
-		protected:
-			utils::SharedEvent0 mEvent0;
-			boost::asio::coroutine __coro_main;
-			void main();
 		};
 
 		class ZZD3D9_API MeshResource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
-			gfx::DeviceResourceEvents* deviceResourceEvents;
 
 			IDirect3DVertexBuffer9Ptr vertexBuffer;
 			IDirect3DVertexDeclaration9Ptr vertexDecl;
@@ -441,9 +439,6 @@ namespace zzlab
 			virtual void draw(ID3DXEffectPtr effect) = 0;
 
 		protected:
-			utils::SharedEvent0 mEvent0;
-			boost::asio::coroutine __coro_main;
-			void main();
 			virtual void initResources() = 0;
 		};
 
@@ -507,7 +502,7 @@ namespace zzlab
 			void init();
 
 		protected:
-			utils::SharedEvent0 mDelegate;
+			utils::Delegate0 mDelegate;
 
 			void frameBegin();
 		};
@@ -528,7 +523,7 @@ namespace zzlab
 			void init();
 
 		protected:
-			utils::SharedEvent0 mDrawDelegate;
+			utils::Delegate0 mDrawDelegate;
 
 			Eigen::Matrix4f mMVP;
 

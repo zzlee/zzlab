@@ -4,6 +4,21 @@
 	<output channel-count="2"/>
 </audio0>
 
+<d3d9exdev
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	multi-sample-type="D3DMULTISAMPLE_NONE"
+	multi-sample-quality="0"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D24S8"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"/>
+
 <d3ddev 
 	back-buffer-format="D3DFMT_X8R8G8B8"
 	back-buffer-count="1"
@@ -15,14 +30,12 @@
 	windowed="true"
 	enable-auto-depth-stencil="true"
 	auto-depth-stencil-format="D3DFMT_D16"
-	flags="D3DSWAPEFFECT_DISCARD"
 	refresh-rate="60"
 	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
 	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
 	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
 	device-type="D3DDEVTYPE_HAL"
-	do-not-wait="true"
-	rate="120.0"/>
+/>
 
 <d3ddev0 
 	back-buffer-format="D3DFMT_X8R8G8B8"
@@ -33,17 +46,15 @@
 	windowed="true"
 	enable-auto-depth-stencil="true"
 	auto-depth-stencil-format="D3DFMT_D16"
-	flags="D3DSWAPEFFECT_DISCARD"
 	refresh-rate="60"
 	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
 	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
 	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
-	device-type="D3DDEVTYPE_HAL"
-	do-not-wait="true"
-	rate="120.0"/>
+	device-type="D3DDEVTYPE_HAL"/>
 
 <!-- <eb4Window title="eb4Window" position="1366,0" size="1024,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/> -->
-<eb4Window title="eb4Window" position="0,0" size="800,600" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<test0 title="Window 0" position="0,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<test1 title="Window 1" position="1366,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
 
 <!-- <Window0 title="Window 0" position="1366,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
 <Window1 title="Window 1" position="1366,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
@@ -51,11 +62,11 @@
 <Window3 title="Window 3" position="2646,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
 <Window4 title="Window 4" position="2006,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
  -->
-<Window0 title="Window 0" position="0,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
-<Window1 title="Window 1" position="0,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
-<Window2 title="Window 2" position="455,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
-<Window3 title="Window 3" position="910,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
-<Window4 title="Window 4" position="455,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window0 title="Window 0" position="0,480" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window1 title="Window 1" position="0,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window2 title="Window 2" position="455,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window3 title="Window 3" position="910,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window4 title="Window 4" position="455,480" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
 
 <MediaPlayer0
 	video-decoder-threads="1"

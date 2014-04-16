@@ -9,6 +9,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/asio/deadline_timer.hpp>
 #include <boost/function.hpp>
 
 #include <log4cplus/logger.h>
@@ -67,10 +68,10 @@ namespace zzlab
 	extern ZZLAB_API boost::asio::io_service _WorkerService;
 
 	// settings
-	typedef rapidxml::xml_document<> XmlDocument;
-	typedef rapidxml::xml_node<> XmlNode;
-	typedef rapidxml::xml_attribute<> XmlAttribute;
-	typedef rapidxml::file<> XmlFile;
+	typedef rapidxml::xml_document<wchar_t> XmlDocument;
+	typedef rapidxml::xml_node<wchar_t> XmlNode;
+	typedef rapidxml::xml_attribute<wchar_t> XmlAttribute;
+	typedef rapidxml::file<wchar_t> XmlFile;
 
 	extern ZZLAB_API XmlDocument _Settings;
 
@@ -96,6 +97,18 @@ namespace zzlab
 	ZZLAB_API void _HR(HRESULT hr, const char *filename, int line);
 	ZZLAB_API void _WIN(BOOL t, const char *filename, int line);
 
+	class ZZLAB_API IdleForever
+	{
+	public:
+		IdleForever(boost::asio::io_service& io_service);
+		~IdleForever();
+
+		void init();
+
+	protected:
+		boost::asio::deadline_timer mTimer;
+		void main(boost::system::error_code err = boost::system::error_code());
+	};
 }
 
 #endif __ZZLAB_H__

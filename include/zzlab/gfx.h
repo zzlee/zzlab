@@ -14,6 +14,7 @@
 
 #include <boost/unordered_map.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/asio/io_service.hpp>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -24,6 +25,13 @@ namespace zzlab
 {
 	namespace gfx
 	{
+		ZZGFX_API void install(void);
+
+		extern ZZGFX_API boost::asio::io_service* _RenderService;
+
+		ZZGFX_API void startRenderService();
+		ZZGFX_API void stopRenderService();
+
 		class ZZGFX_API RendererEvents
 		{
 		public:
@@ -95,39 +103,6 @@ namespace zzlab
 			utils::AsyncEvents0 mFrameEnd;
 		};
 		
-		class ZZGFX_API DeviceResourceEvents
-		{
-		public:
-			explicit DeviceResourceEvents();
-			virtual ~DeviceResourceEvents();
-
-			template<class T>
-			void waitForDeviceLost(T cb)
-			{
-				mDeviceLost.enqueue(cb);
-			}
-
-			template<class T>
-			void waitForDeviceReset(T cb)
-			{
-				mDeviceReset.enqueue(cb);
-			}
-
-			void deviceLost()
-			{
-				mDeviceLost.invoke();
-			}
-
-			void deviceReset()
-			{
-				mDeviceReset.invoke();
-			}
-
-		protected:
-			utils::AsyncEvents0 mDeviceLost;
-			utils::AsyncEvents0 mDeviceReset;
-		};
-
 		class ZZGFX_API Resource
 		{
 		public:
@@ -139,25 +114,25 @@ namespace zzlab
 		{
 		public:
 			explicit ResourceManager();
-			~ResourceManager();
+			virtual ~ResourceManager();
 
-			Resource* get(const std::string &name)
+			Resource* get(const std::wstring &name)
 			{
 				return mPool[name];
 			}
 
-			void set(const std::string &name, Resource* obj);
+			void set(const std::wstring &name, Resource* obj);
 
 			template<class T>
-			T* get(const std::string &name)
+			T* get(const std::wstring &name)
 			{
 				return dynamic_cast<T*>(get(name));
 			}
 						
-			Resource* remove(const std::string &name);
+			Resource* remove(const std::wstring &name);
 
 			template<class T>
-			T* remove(const std::string &name)
+			T* remove(const std::wstring &name)
 			{
 				return dynamic_cast<T*>(remove(name));
 			}
@@ -165,7 +140,7 @@ namespace zzlab
 			void clear();
 
 		protected:
-			typedef boost::unordered_map<std::string, Resource*> pool_t;
+			typedef boost::unordered_map<std::wstring, Resource*> pool_t;
 
 			pool_t mPool;
 		};
