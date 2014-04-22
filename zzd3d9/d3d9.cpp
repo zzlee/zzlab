@@ -811,6 +811,16 @@ namespace zzlab
 			}
 		}
 
+		Resource::Resource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		Resource::~Resource()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
 		TextureResource::TextureResource()
 		{
 			ZZLAB_TRACE_THIS();
@@ -819,11 +829,6 @@ namespace zzlab
 		TextureResource::~TextureResource()
 		{
 			ZZLAB_TRACE_THIS();
-		}
-
-		void TextureResource::init()
-		{
-			initResources();
 		}
 
 		FileTextureResource::FileTextureResource()
@@ -836,7 +841,7 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void FileTextureResource::initResources()
+		void FileTextureResource::init()
 		{
 			ZZLAB_TRACE("Create texture from " << path.wstring());
 			textures[0] = createTextureFromFile(dev, path.wstring().c_str());
@@ -855,7 +860,7 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void DynamicTextureResource::initResources()
+		void DynamicTextureResource::init()
 		{
 			ZZLAB_TRACE("Create dynamic texture of " << width << 'x' << height << '@' << format);
 			texture = createDynamicTexture(dev, width, height, format);
@@ -886,7 +891,7 @@ namespace zzlab
 				));
 		}
 
-		void DynamicYUVTextureResource::initResources()
+		void DynamicYUVTextureResource::init()
 		{
 			ZZLAB_TRACE("Create dynamic YUV texture, Y plane size: " << width << 'x' << height <<
 				", UV plane size: " << uvWidth << 'x' << uvHeight);
@@ -909,7 +914,7 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void RenderTextureResource::initResources()
+		void RenderTextureResource::init()
 		{
 			textures[0] = createTexture(dev, width, height, 1, D3DUSAGE_RENDERTARGET, format);
 
@@ -979,11 +984,6 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void MeshResource::init()
-		{
-			initResources();
-		}
-
 		QuadMeshResource::QuadMeshResource()
 		{
 			ZZLAB_TRACE_THIS();
@@ -994,7 +994,7 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void QuadMeshResource::initResources()
+		void QuadMeshResource::init()
 		{
 			vertexBuffer = createVertexBuffer(dev,
 				4 * sizeof(VERTEX_XYZ_UV0));
@@ -1080,7 +1080,7 @@ namespace zzlab
 			ZZLAB_TRACE_THIS();
 		}
 
-		void LatticeMeshResource::initResources()
+		void LatticeMeshResource::init()
 		{
 			vertexBuffer = createVertexBuffer(dev, vertices.size() * sizeof(VERTEX_XYZ_UV0));
 			updateVertices();
@@ -1134,7 +1134,6 @@ namespace zzlab
 		}
 
 		ClearScene::ClearScene() :
-			dev(NULL),
 			rendererEvents(NULL),
 			flags(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER),
 			color(D3DCOLOR_XRGB(0, 0, 0)),
@@ -1151,11 +1150,11 @@ namespace zzlab
 
 		void ClearScene::init()
 		{
-			mDelegate.connect(bind(&ClearScene::frameBegin, this));
+			mDelegate.connect(bind(&ClearScene::onFrameBegin, this));
 			rendererEvents->waitForFrameBegin(mDelegate());
 		}
 
-		void ClearScene::frameBegin()
+		void ClearScene::onFrameBegin()
 		{
 			//ZZLAB_TRACE_THIS();
 
@@ -1187,12 +1186,12 @@ namespace zzlab
 			Eigen::Projective3f MATRIX_MVP = camera.matrix() * t0;
 			mMVP = MATRIX_MVP.matrix();
 
-			mDrawDelegate.connect(bind(&eb4Renderer::draw, this));
+			mDrawDelegate.connect(bind(&eb4Renderer::onDraw, this));
 
 			rendererEvents->waitForDraw(mDrawDelegate());
 		}
 
-		void eb4Renderer::draw()
+		void eb4Renderer::onDraw()
 		{
 			//ZZLAB_TRACE_THIS();
 

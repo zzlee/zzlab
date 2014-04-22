@@ -299,20 +299,24 @@ namespace zzlab
 			loadAssets(renderDevice->dev, renderDevice, path);
 		}
 
-		class ZZD3D9_API TextureResource : public gfx::Resource
+		class ZZD3D9_API Resource : public gfx::Resource
 		{
 		public:
 			IDirect3DDevice9ExPtr dev;
 
+			explicit Resource();
+			virtual ~Resource();
+
+			virtual void init() = 0;
+		};
+
+		class ZZD3D9_API TextureResource : public Resource
+		{
+		public:
 			IDirect3DTexture9Ptr textures[8];
 
 			explicit TextureResource();
 			virtual ~TextureResource();
-
-			void init();
-
-		protected:
-			virtual void initResources() = 0;
 		};
 
 		class ZZD3D9_API FileTextureResource : public TextureResource
@@ -323,8 +327,7 @@ namespace zzlab
 			explicit FileTextureResource();
 			virtual ~FileTextureResource();
 
-		protected:
-			virtual void initResources();
+			virtual void init();
 		};
 
 		class ZZD3D9_API DynamicTextureResource : public TextureResource
@@ -349,8 +352,7 @@ namespace zzlab
 				updateDynamicTexture(dev, texture, v);
 			}
 
-		protected:
-			virtual void initResources();
+			virtual void init();
 		};
 
 		class ZZD3D9_API DynamicYUVTextureResource : public TextureResource
@@ -373,8 +375,7 @@ namespace zzlab
 				updateYUVTexture(dev, texture, yuv);
 			}
 
-		protected:
-			virtual void initResources();
+			virtual void init();
 		};
 
 		class ZZD3D9_API RenderTextureResource : public TextureResource
@@ -389,8 +390,7 @@ namespace zzlab
 			explicit RenderTextureResource();
 			virtual ~RenderTextureResource();
 
-		protected:
-			virtual void initResources();
+			virtual void init();
 		};
 
 		class ZZD3D9_API RenderTexture : public RenderTextureResource, public gfx::RendererEvents
@@ -409,10 +409,9 @@ namespace zzlab
 			void onFrameBegin();
 		};
 
-		class ZZD3D9_API EffectResource : public gfx::Resource
+		class ZZD3D9_API EffectResource : public Resource
 		{
 		public:
-			IDirect3DDevice9ExPtr dev;
 			boost::filesystem::wpath path;
 
 			ID3DXEffectPtr effect;
@@ -420,14 +419,12 @@ namespace zzlab
 			explicit EffectResource();
 			virtual ~EffectResource();
 
-			void init();
+			virtual void init();
 		};
 
-		class ZZD3D9_API MeshResource : public gfx::Resource
+		class ZZD3D9_API MeshResource : public Resource
 		{
 		public:
-			IDirect3DDevice9ExPtr dev;
-
 			IDirect3DVertexBuffer9Ptr vertexBuffer;
 			IDirect3DVertexDeclaration9Ptr vertexDecl;
 			IDirect3DIndexBuffer9Ptr indexBuffer;
@@ -435,23 +432,7 @@ namespace zzlab
 			explicit MeshResource();
 			virtual ~MeshResource();
 
-			void init();
 			virtual void draw(ID3DXEffectPtr effect) = 0;
-
-		protected:
-			virtual void initResources() = 0;
-		};
-
-		class ZZD3D9_API QuadMeshResource : public MeshResource
-		{
-		public:
-			explicit QuadMeshResource();
-			virtual ~QuadMeshResource();
-
-			virtual void draw(ID3DXEffectPtr effect);
-
-		protected:
-			virtual void initResources();
 		};
 
 		struct ZZD3D9_API VERTEX_XYZ_UV0
@@ -460,6 +441,16 @@ namespace zzlab
 			D3DXVECTOR2 UV0;
 
 			static IDirect3DVertexDeclaration9Ptr decl(LPDIRECT3DDEVICE9 dev);
+		};
+
+		class ZZD3D9_API QuadMeshResource : public MeshResource
+		{
+		public:
+			explicit QuadMeshResource();
+			virtual ~QuadMeshResource();
+
+			virtual void init();
+			virtual void draw(ID3DXEffectPtr effect);
 		};
 
 		class ZZD3D9_API LatticeMeshResource : public MeshResource
@@ -479,16 +470,14 @@ namespace zzlab
 			}
 
 			void updateVertices();
-			virtual void draw(ID3DXEffectPtr effect);
 
-		protected:
-			virtual void initResources();
+			virtual void init();
+			virtual void draw(ID3DXEffectPtr effect);
 		};
 
-		class ZZD3D9_API ClearScene
+		class ZZD3D9_API ClearScene : public Resource
 		{
 		public:
-			IDirect3DDevice9ExPtr dev;
 			gfx::RendererEvents* rendererEvents;
 
 			DWORD flags;
@@ -499,12 +488,12 @@ namespace zzlab
 			explicit ClearScene();
 			virtual ~ClearScene();
 
-			void init();
+			virtual void init();
 
 		protected:
 			utils::Delegate0 mDelegate;
 
-			void frameBegin();
+			void onFrameBegin();
 		};
 
 		class ZZD3D9_API eb4Renderer
@@ -527,7 +516,7 @@ namespace zzlab
 
 			Eigen::Matrix4f mMVP;
 
-			void draw();
+			void onDraw();
 		};
 
 	} // namespace d3d9
