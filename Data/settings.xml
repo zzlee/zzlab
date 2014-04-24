@@ -52,6 +52,20 @@
 	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
 	device-type="D3DDEVTYPE_HAL"/>
 
+<D3D9Window0 
+	d3ddev-ref="d3d9exdev" 
+	title="Window 0"
+	position="0,0" 
+	size="1366,768" 
+	style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+
+<D3D9Window1 
+	d3ddev-ref="d3d9exdev" 
+	title="Window 1"
+	position="1366,0" 
+	size="1366,768" 
+	style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+
 <!-- <eb4Window title="eb4Window" position="1366,0" size="1024,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/> -->
 <test0 title="Window 0" position="0,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
 <test1 title="Window 1" position="1366,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>

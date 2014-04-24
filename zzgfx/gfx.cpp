@@ -83,17 +83,23 @@ namespace zzlab
 
 			if (renderServiceRunning)
 			{
+				ZZLAB_STEP();
 				_RenderService->stop();
+				ZZLAB_STEP();
 				renderThread->join();
+				ZZLAB_STEP();
 
 				renderServiceRunning = false;
 
+				ZZLAB_STEP();
 				delete idle;
 				idle = nullptr;
 
+				ZZLAB_STEP();
 				delete renderThread;
 				renderThread = nullptr;
 
+				ZZLAB_STEP();
 				delete _RenderService;
 				_RenderService = &_MainService;
 
@@ -190,6 +196,25 @@ namespace zzlab
 				delete (*i).second;
 
 			mPool.clear();
+		}
+
+		XmlResource::XmlResource() : file(nullptr)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		XmlResource::~XmlResource()
+		{
+			ZZLAB_TRACE_THIS();
+
+			if (file)
+				delete file;
+		}
+
+		void XmlResource::init()
+		{
+			file = new XmlFile(path.string().c_str());
+			doc.parse<0>(file->data());
 		}
 
 		Eigen::Matrix4f perspectiveRH(float w, float h, float zn, float zf)

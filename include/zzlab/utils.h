@@ -19,6 +19,7 @@ extern "C"
 #include <boost/thread/mutex.hpp>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/tuple/tuple.hpp>
+#include <boost/weak_ptr.hpp>
 
 #include <tbb/tbb.h>
 
@@ -252,98 +253,6 @@ namespace zzlab
 			};
 		};
 		typedef Delegate<void()> Delegate0;
-
-		//template<class T>
-		//class SharedEvent
-		//{
-		//public:
-		//	explicit SharedEvent()
-		//	{
-		//	}
-
-		//	explicit SharedEvent(SharedEvent& se) : holder(se.holder)
-		//	{
-		//	}
-
-		//	explicit SharedEvent(const T& t) : holder(new T(t))
-		//	{
-		//	}
-
-		//	void connect(const T& t)
-		//	{
-		//		holder.reset(new T(t));
-		//	}
-
-		//	void cancel()
-		//	{
-		//		holder.reset();
-		//	}
-
-		//	T operator()()
-		//	{
-		//		return T(WeakRef(holder));
-		//	}
-
-		//protected:
-		//	boost::shared_ptr<T> holder;
-
-		//	struct WeakRef : public boost::weak_ptr<T>
-		//	{
-		//		explicit WeakRef(const boost::shared_ptr<T>& ptr) : boost::weak_ptr<T>(ptr)
-		//		{
-
-		//		}
-
-		//		void operator()()
-		//		{
-		//			if (boost::shared_ptr<T> t = lock())
-		//				(*t)();
-		//		}
-
-		//		template<class T1>
-		//		void operator()(T1 arg1)
-		//		{
-		//			if (boost::shared_ptr<T> t = lock())
-		//				(*t)(arg1);
-		//		}
-
-		//		template<class T1, class T2>
-		//		void operator()(T1 arg1, T2 arg2)
-		//		{
-		//			if (boost::shared_ptr<T> t = cb.lock())
-		//				(*t)(arg1, arg2);
-		//		}
-
-		//		template<class T1, class T2, class T3>
-		//		void operator()(T1 arg1, T2 arg2, T3 arg3)
-		//		{
-		//			if (boost::shared_ptr<T> t = cb.lock())
-		//				(*t)(arg1, arg2, arg3);
-		//		}
-
-		//		template<class T1, class T2, class T3, class T4>
-		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
-		//		{
-		//			if (boost::shared_ptr<T> t = cb.lock())
-		//				(*t)(arg1, arg2, arg3, arg4);
-		//		}
-
-		//		template<class T1, class T2, class T3, class T4, class T5>
-		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
-		//		{
-		//			if (boost::shared_ptr<T> t = cb.lock())
-		//				(*t)(arg1, arg2, arg3, arg4, arg5);
-		//		}
-
-		//		template<class T1, class T2, class T3, class T4, class T5, class T6>
-		//		void operator()(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6)
-		//		{
-		//			if (boost::shared_ptr<T> t = cb.lock())
-		//				(*t)(arg1, arg2, arg3, arg4, arg5, arg6);
-		//		}
-		//	};
-		//};
-		//typedef SharedEvent<boost::function<void()> > SharedEvent0;
 
 		template<class T>
 		class AsyncEvents

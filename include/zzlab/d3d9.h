@@ -248,6 +248,13 @@ namespace zzlab
 			DWORD behaviorFlags;
 			D3DSCANLINEORDERING scanLineOrdering;
 
+			struct clear_t {
+				DWORD flags;
+				D3DCOLOR color;
+				float depth;
+				float stencil;
+			} clear;
+
 			explicit RenderDevice();
 			~RenderDevice();
 
@@ -257,11 +264,7 @@ namespace zzlab
 			// NOTICE: access after init is called
 			IDirect3DDevice9ExPtr dev;
 
-			void cancel()
-			{
-				mMainDelegate.cancel();
-			}
-
+			void cancel();
 			void reset();
 
 			void restoreBackBuffer()
@@ -306,8 +309,6 @@ namespace zzlab
 
 			explicit Resource();
 			virtual ~Resource();
-
-			virtual void init() = 0;
 		};
 
 		class ZZD3D9_API TextureResource : public Resource
@@ -398,6 +399,8 @@ namespace zzlab
 		public:
 			RenderDevice* renderDevice;
 
+			RenderDevice::clear_t clear;
+
 			explicit RenderTexture();
 			virtual ~RenderTexture();
 
@@ -475,27 +478,6 @@ namespace zzlab
 			virtual void draw(ID3DXEffectPtr effect);
 		};
 
-		class ZZD3D9_API ClearScene : public Resource
-		{
-		public:
-			gfx::RendererEvents* rendererEvents;
-
-			DWORD flags;
-			D3DCOLOR color;
-			float Z;
-			DWORD stencil;
-
-			explicit ClearScene();
-			virtual ~ClearScene();
-
-			virtual void init();
-
-		protected:
-			utils::Delegate0 mDelegate;
-
-			void onFrameBegin();
-		};
-
 		class ZZD3D9_API eb4Renderer
 		{
 		public:
@@ -518,6 +500,21 @@ namespace zzlab
 
 			void onDraw();
 		};
+
+		class ZZD3D9_API RenderWindow : public wxTopLevelWindow, public RenderDevice
+		{
+		public:
+			IDirect3D9ExPtr d3d9ex;
+			std::wstring d3ddevRef;
+
+			RenderWindow(wxWindow *parent, wxWindowID id, const wxString &title, const wxPoint &pos = wxDefaultPosition, const wxSize &size = wxDefaultSize, long style = wxDEFAULT_FRAME_STYLE);
+			~RenderWindow();
+
+			void init();
+			bool Destroy();
+		};
+
+		ZZD3D9_API RenderWindow* loadWindow(IDirect3D9ExPtr d3d9ex, XmlNode* node, wxWindow* parent = NULL);
 
 	} // namespace d3d9
 } // namespace zzlab

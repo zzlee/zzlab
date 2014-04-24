@@ -3,8 +3,8 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <IncludePath>d:\dev\usr64\include;d:\dev\usr64\include\boost-1_55;d:\dev\usr64\include\eigen3;$(IncludePath)</IncludePath>
-    <LibraryPath>d:\dev\usr64\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>d:\dev\usr64\include;d:\dev\usr64\include\boost-1_55;d:\dev\usr64\include\eigen3;C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include;$(IncludePath)</IncludePath>
+    <LibraryPath>d:\dev\usr64\lib;C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Lib\x64;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>

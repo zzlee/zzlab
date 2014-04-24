@@ -36,7 +36,8 @@ public:
 
 enum
 {
-	ID_FULLSCREEN = 0x0010
+	ID_FULLSCREEN = 0x0010,
+	ID_STAY_ON_TOP,
 };
 
 class MyRenderWindow : public wxTopLevelWindow
@@ -89,10 +90,13 @@ protected:
 
 	void OnFullScreen(wxCommandEvent& event);
 	void _OnFullScreen();
+
+	void OnStayOnTop(wxCommandEvent& event);
 };
 
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
 EVT_MENU(ID_FULLSCREEN, MyFrame::OnFullScreen)
+EVT_MENU(ID_STAY_ON_TOP, MyFrame::OnStayOnTop)
 wxEND_EVENT_TABLE()
 
 MyRenderWindow::MyRenderWindow(wxWindow *parent, wxWindowID id, const wxString &title, const wxPoint &pos, const wxSize &size, long style)
@@ -250,7 +254,8 @@ wxFrame(NULL, wxID_ANY, title, pos, size)
 	ZZLAB_TRACE_THIS();
 
 	wxMenu *menuFile = new wxMenu;
-	menuFile->Append(ID_FULLSCREEN, "&Full Screen\tCtrl+F");
+	menuFile->Append(ID_FULLSCREEN, "&Toggle Full Screen\tCtrl+F");
+	menuFile->Append(ID_STAY_ON_TOP, "&Toggle Stay-on-top");
 	menuFile->Append(wxID_EXIT);
 
 	wxMenuBar *menuBar = new wxMenuBar;
@@ -259,7 +264,7 @@ wxFrame(NULL, wxID_ANY, title, pos, size)
 	SetMenuBar(menuBar);
 	CreateStatusBar();
 
-	if (1)
+	if (0)
 	{
 		MyRenderWindow* rw = wx::loadWindow<MyRenderWindow>(_Settings.first_node(L"test0"), this);
 		rw->init();
@@ -302,11 +307,21 @@ void MyFrame::OnFullScreen(wxCommandEvent& event)
 
 void MyFrame::_OnFullScreen()
 {
-	ZZLAB_INFO("Full screen mode");
+	ZZLAB_INFO("Toggle full screen mode");
 
 	for (auto x : mRenderWindows)
 	{
 		x->renderDevice.toggleFullscreen();
+	}
+}
+
+void MyFrame::OnStayOnTop(wxCommandEvent& event)
+{
+	ZZLAB_INFO("Toggle stay on top mode");
+
+	for (auto x : mRenderWindows)
+	{
+		x->SetWindowStyleFlag(x->GetWindowStyleFlag() ^ wxSTAY_ON_TOP);
 	}
 }
 

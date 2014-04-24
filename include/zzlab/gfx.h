@@ -108,6 +108,8 @@ namespace zzlab
 		public:
 			explicit Resource();
 			virtual ~Resource();
+
+			virtual void init() = 0;
 		};
 
 		class ZZGFX_API ResourceManager
@@ -143,6 +145,20 @@ namespace zzlab
 			typedef boost::unordered_map<std::wstring, Resource*> pool_t;
 
 			pool_t mPool;
+		};
+
+		class ZZGFX_API XmlResource : public Resource
+		{
+		public:
+			boost::filesystem::wpath path;
+
+			XmlFile* file;
+			XmlDocument doc;
+
+			explicit XmlResource();
+			virtual ~XmlResource();
+
+			virtual void init();
 		};
 
 		ZZGFX_API Eigen::Matrix4f perspectiveRH(float w, float h, float zn, float zf);

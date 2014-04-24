@@ -441,6 +441,11 @@ namespace zzlab
 
 			deviceType = D3DDEVTYPE_HAL;
 			scanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
+			clear.flags = D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER;
+			clear.color = D3DXCOLOR(0.098039225f, 0.098039225f, 0.439215720f, 1.000000000f);
+			clear.depth = 1.0f;
+			clear.stencil = 0.0f;
 		}
 
 		RenderDevice::~RenderDevice()
@@ -729,6 +734,14 @@ namespace zzlab
 			gfx::_RenderService->post(boost::bind(mMainDelegate(), system::error_code()));
 		}
 
+		void RenderDevice::cancel()
+		{
+			mTimer.cancel();
+			mMainDelegate.cancel();
+			mBackBuffer = nullptr;
+			dev = nullptr;
+		}
+
 		void RenderDevice::reset()
 		{
 			D3DPRESENT_PARAMETERS tmp = d3dpp;
@@ -757,13 +770,22 @@ namespace zzlab
 			if (error)
 				return;
 
+			if (clear.flags != 0)
+				HR(dev->Clear(0, NULL, clear.flags, clear.color, clear.depth, clear.stencil));
+
 			frameBegin();
 
-			HR(dev->BeginScene());
-			draw();
-			HR(dev->EndScene());
+			try
+			{
+				HR(dev->BeginScene());
+				draw();
+				HR(dev->EndScene());
 
-			HR(dev->PresentEx(NULL, NULL, NULL, NULL, 0));
+				HR(dev->PresentEx(NULL, NULL, NULL, NULL, 0));
+			}
+			catch (const _com_error)
+			{
+			}
 
 			frameEnd();
 
@@ -784,30 +806,42 @@ namespace zzlab
 
 			XmlNode* assets = settings.first_node(L"Assets");
 
-			for (XmlNode* node = assets->first_node(L"Texture"); node; node = node->next_sibling(L"Texture"))
+			for (XmlNode* node = assets->first_node(); node; node = node->next_sibling())
 			{
-				d3d9::FileTextureResource* res = new d3d9::FileTextureResource();
-				res->dev = dev;
-				res->path = _AssetsPath / node->first_attribute(L"path")->value();
-				res->init();
-				resources->set(node->first_attribute(L"name")->value(), res);
-			}
-
-			for (XmlNode* node = assets->first_node(L"Effect"); node; node = node->next_sibling(L"Effect"))
-			{
-				d3d9::EffectResource* res = new d3d9::EffectResource();
-				res->dev = dev;
-				res->path = _AssetsPath / node->first_attribute(L"path")->value();
-				res->init();
-				resources->set(node->first_attribute(L"name")->value(), res);
-			}
-
-			for (XmlNode* node = assets->first_node(L"Quad"); node; node = node->next_sibling(L"Quad"))
-			{
-				d3d9::QuadMeshResource* res = new d3d9::QuadMeshResource();
-				res->dev = dev;
-				res->init();
-				resources->set(node->first_attribute(L"name")->value(), res);
+				if (_wcsicmp(L"Texture", node->name()) == 0)
+				{
+					d3d9::FileTextureResource* res = new d3d9::FileTextureResource();
+					res->dev = dev;
+					res->path = _AssetsPath / node->first_attribute(L"path")->value();
+					res->init();
+					resources->set(node->first_attribute(L"name")->value(), res);
+				}
+				else if (_wcsicmp(L"Effect", node->name()) == 0)
+				{
+					d3d9::EffectResource* res = new d3d9::EffectResource();
+					res->dev = dev;
+					res->path = _AssetsPath / node->first_attribute(L"path")->value();
+					res->init();
+					resources->set(node->first_attribute(L"name")->value(), res);
+				}
+				else if (_wcsicmp(L"Quad", node->name()) == 0)
+				{
+					d3d9::QuadMeshResource* res = new d3d9::QuadMeshResource();
+					res->dev = dev;
+					res->init();
+					resources->set(node->first_attribute(L"name")->value(), res);
+				}
+				else if (_wcsicmp(L"Xml", node->name()) == 0)
+				{
+					gfx::XmlResource* res = new gfx::XmlResource();
+					res->path = _AssetsPath / node->first_attribute(L"path")->value();
+					res->init();
+					resources->set(node->first_attribute(L"name")->value(), res);
+				}
+				else
+				{
+					ZZLAB_WARN("Unexpected asset type: " << node->name());
+				}
 			}
 		}
 
@@ -926,6 +960,11 @@ namespace zzlab
 		RenderTexture::RenderTexture() : renderDevice(NULL)
 		{
 			ZZLAB_TRACE_THIS();
+
+			clear.flags = D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER;
+			clear.color = D3DXCOLOR(0, 0, 0, 1);
+			clear.depth = 1.0f;
+			clear.stencil = 0.0f;
 		}
 
 		RenderTexture::~RenderTexture()
@@ -946,6 +985,8 @@ namespace zzlab
 		void RenderTexture::onFrameBegin()
 		{
 			HR(dev->SetRenderTarget(0, surface));
+
+			HR(dev->Clear(0, NULL, clear.flags, clear.color, clear.depth, clear.stencil));
 			frameBegin();
 
 			HR(dev->BeginScene());
@@ -1133,35 +1174,6 @@ namespace zzlab
 			drawTriangleList(dev, effect, width * height, (width - 1) * (height - 1) * 2);
 		}
 
-		ClearScene::ClearScene() :
-			rendererEvents(NULL),
-			flags(D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER),
-			color(D3DCOLOR_XRGB(0, 0, 0)),
-			Z(1.0f),
-			stencil(0.0f)
-		{
-			ZZLAB_TRACE_THIS();
-		}
-
-		ClearScene::~ClearScene()
-		{
-			ZZLAB_TRACE_THIS();
-		}
-
-		void ClearScene::init()
-		{
-			mDelegate.connect(bind(&ClearScene::onFrameBegin, this));
-			rendererEvents->waitForFrameBegin(mDelegate());
-		}
-
-		void ClearScene::onFrameBegin()
-		{
-			//ZZLAB_TRACE_THIS();
-
-			HR(dev->Clear(0, NULL, flags, color, Z, stencil));
-			rendererEvents->waitForFrameBegin(mDelegate());
-		}
-
 		eb4Renderer::eb4Renderer() : rendererEvents(NULL), effect(NULL), mainTex(NULL), horTex(NULL), verTex(NULL)
 		{
 			ZZLAB_TRACE_THIS();
@@ -1206,6 +1218,43 @@ namespace zzlab
 			lattice->draw(effect->effect);
 
 			rendererEvents->waitForDraw(mDrawDelegate());
+		}
+
+		RenderWindow::RenderWindow(wxWindow *parent, wxWindowID id, const wxString &title, const wxPoint &pos, const wxSize &size, long style)
+			: wxTopLevelWindow(parent, id, title, pos, size, style)
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		RenderWindow::~RenderWindow()
+		{
+			ZZLAB_TRACE_THIS();
+		}
+
+		void RenderWindow::init()
+		{
+			RenderDevice::load(_Settings.first_node(d3ddevRef.c_str()), (HWND)GetHandle());
+			RenderDevice::init(d3d9ex, -1, GetParent() ? (HWND)GetParent()->GetHandle() : nullptr);
+
+			d3d9::loadAssets(this, _DataPath / "assets.xml");
+
+			_MainService.post(bind(&RenderWindow::Show, this, true));
+		}
+
+		bool RenderWindow::Destroy()
+		{
+			ZZLAB_TRACE_THIS();
+
+			return wxTopLevelWindow::Destroy();
+		}
+
+		RenderWindow* loadWindow(IDirect3D9ExPtr d3d9ex, XmlNode* node, wxWindow* parent)
+		{
+			RenderWindow* rw = wx::loadWindow<RenderWindow>(node, parent);
+			rw->d3d9ex = d3d9ex;
+			rw->d3ddevRef = node->first_attribute(L"d3ddev-ref")->value();
+
+			return rw;
 		}
 
 	} // namespace d3d9
