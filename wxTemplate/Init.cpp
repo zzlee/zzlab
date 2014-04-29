@@ -38,6 +38,15 @@ d3d9::MeshResource* mesh;
 d3d9::TextureResource* texture;
 D3DXCOLOR diffuse;
 
+void quitapp()
+{
+	frameBeginDelegate.cancel();
+	drawDelegate.cancel();
+	rw->cancel();
+
+	_MainService.post(bind(&d3d9::RenderWindow::Destroy, rw));
+}
+
 void frameBegin()
 {
 	//ZZLAB_TRACE_FUNCTION();
@@ -45,14 +54,7 @@ void frameBegin()
 	input->update();
 
 	if (input->getKey(DIK_ESCAPE))
-	{
-		frameBeginDelegate.cancel();
-		drawDelegate.cancel();
-		rw->cancel();
-
-		_MainService.post(bind(&d3d9::RenderWindow::Destroy, rw));
-		return;
-	}
+		gfx::_RenderService->post(bind(quitapp));
 
 	rw->waitForFrameBegin(frameBeginDelegate());
 }
