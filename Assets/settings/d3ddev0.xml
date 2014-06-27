@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<setting
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	multi-sample-type="D3DMULTISAMPLE_NONE"
+	multi-sample-quality="0"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D24S8"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"/>

@@ -1,0 +1,208 @@
+<?xml version='1.0' encoding='utf-8'?>
+<audio0 sample-rate="44100">
+	<!-- <input/> -->
+	<output channel-count="2"/>
+</audio0>
+
+<d3d9exdev
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	multi-sample-type="D3DMULTISAMPLE_NONE"
+	multi-sample-quality="0"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D24S8"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"/>
+
+<d3ddev 
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	back-buffer-width="1024"
+	back-buffer-height="768"
+	multi-sample-type="D3DMULTISAMPLE_4_SAMPLES"
+	multi-sample-quality="4"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D16"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"
+/>
+
+<d3ddev0 
+	back-buffer-format="D3DFMT_X8R8G8B8"
+	back-buffer-count="1"
+	back-buffer-width="1024"
+	back-buffer-height="768"
+	swap-effect="D3DSWAPEFFECT_DISCARD"
+	windowed="true"
+	enable-auto-depth-stencil="true"
+	auto-depth-stencil-format="D3DFMT_D16"
+	refresh-rate="60"
+	presentation-interval="D3DPRESENT_INTERVAL_DEFAULT"
+	behavior-flags="D3DCREATE_HARDWARE_VERTEXPROCESSING"
+	scan-line-ordering="D3DSCANLINEORDERING_PROGRESSIVE"
+	device-type="D3DDEVTYPE_HAL"/>
+
+<!-- <eb4Window title="eb4Window" position="1366,0" size="1024,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/> -->
+<test0 title="Window 0" position="0,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<test1 title="Window 1" position="1366,0" size="1366,768" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+
+<!-- <Window0 title="Window 0" position="1366,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window1 title="Window 1" position="1366,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window2 title="Window 2" position="2006,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window3 title="Window 3" position="2646,0" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window4 title="Window 4" position="2006,480" size="640,480" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+ -->
+<Window0 title="Window 0" position="0,480" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window1 title="Window 1" position="0,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window2 title="Window 2" position="455,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window3 title="Window 3" position="910,0" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+<Window4 title="Window 4" position="455,480" size="320,240" style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
+
+<MediaPlayer0
+	video-decoder-threads="1"
+	video-queue-size="128"
+	video-drop-tolerance="2"
+	audio-queue-size="128"
+	audio-drop-tolerance="2"/>
+
+<VideoCap0
+	index="0"
+	width="640"
+	height="480"
+	null-sync-source="true"/>
+
+<Quad0 position="220,0" size="622,768"/>
+<VideoROI0 position="0,0" size="622,768" />
+<LiveROI0 position="0,0" size="0,0" />
+<EdgeBlend0>
+	<left enable="true" width="50"/>
+	<right enable="true" width="50"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="15" height="13"/>
+</EdgeBlend0>
+
+<Quad1 position="842,0" size="182,480"/>
+<VideoROI1 position="622,0" size="182,768" />
+<LiveROI1 position="0,0" size="0,0" />
+<EdgeBlend1>
+	<left enable="true" width="8"/>
+	<right enable="true" width="64"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="10" height="13"/>
+</EdgeBlend1>
+
+<Quad2 position="0,0" size="1024,768"/>
+<VideoROI2 position="0,0" size="896,768" />
+<!-- <LiveROI2 position="0,220" size="789,640" /> -->
+<LiveROI2 position="0,0" size="640,480" />
+<EdgeBlend2>
+	<left enable="true" width="64"/>
+	<right enable="true" width="256"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="15" height="13"/>
+</EdgeBlend2>
+
+<Quad3 position="0,0" size="1024,768"/>
+<VideoROI3 position="642,0" size="896,768" />
+<!-- <LiveROI3 position="565,220" size="790,640" /> -->
+<LiveROI3 position="0,0" size="640,480" />
+<EdgeBlend3 subdiv-level="5">
+	<left enable="true" width="256"/>
+	<right enable="true" width="256"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="15" height="13"/>
+</EdgeBlend3>
+
+<Quad4 position="0,0" size="1024,768"/>
+<VideoROI4 position="1284,0" size="896,768" />
+<!-- <LiveROI4 position="1131,220" size="789,640" /> -->
+<LiveROI4 position="0,0" size="640,480" />
+<EdgeBlend4>
+	<left enable="true" width="256"/>
+	<right enable="true" width="64"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="15" height="13"/>
+</EdgeBlend4>
+
+<Quad5 position="0,0" size="182,768"/>
+<VideoROI5 position="0,0" size="182,768" />
+<LiveROI5 position="0,0" size="0,0" />
+<EdgeBlend5>
+	<left enable="true" width="64"/>
+	<right enable="true" width="8"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="10" height="13"/>
+</EdgeBlend5>
+
+<Quad6 position="182,0" size="622,768"/>
+<VideoROI6 position="182,0" size="622,768" />
+<LiveROI6 position="0,0" size="0,0" />
+<EdgeBlend6>
+	<left enable="true" width="50"/>
+	<right enable="true" width="50"/>
+	<top enable="true" width="30"/>
+	<bottom enable="true" width="30"/>
+	<grid-image width="15" height="13"/>
+</EdgeBlend6>
+
+<FileNameMapping>
+	<File name="01" dst="LIVE"/>
+	<File name="02" dst="asus_kv.mov"/>
+	<File name="03" dst="op.mp4"/>
+	<File name="04" dst="20_M.mp4"/>
+	<File name="05" dst="10_M.mp4"/>
+	<File name="06" dst="tvc.mp4"/>
+	<File name="07" dst="zonfone.mp4"/>
+
+	<File name="b1" dst="asus_logo_l_a.mp4"/>
+	<File name="b2" dst="20_L.mp4"/>
+	<File name="b3" dst="10_L.mp4"/>
+	<File name="b4" dst="zenfone_l.mov"/>
+	<File name="b5" dst="intel_logo_L.mp4"/>
+	<File name="b6" dst="asus_logo_L_b.mp4"/>
+
+	<File name="c1" dst="asus_logo_r_a.mp4"/>
+	<File name="c2" dst="20_r.mp4"/>
+	<File name="c3" dst="10_r.mp4"/>
+	<File name="c4" dst="zenfone_r.mov"/>
+	<File name="c5" dst="intel_logo_r.mp4"/>
+	<File name="c6" dst="asus_logo_r_b.mp4"/>
+
+	<File name="x1" dst="light1.jpg"/>
+</FileNameMapping>
+
+<Schedule fade-out-length="1.0">
+	<Cut A="01" A-ending="loop" A-fade-out="0" B="b1" C="c1" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="03" A-ending="stop" A-fade-out="1" B="b1" C="c1" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="01" A-ending="loop" A-fade-out="0" B="b1" C="c1" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="04" A-ending="stop" A-fade-out="0" B="b2" C="c2" BC-ending="stop" BC-fade-out="0"/>
+	<Cut A="01" A-ending="na" A-fade-out="0" B="b1" C="c1" BC-ending="loop" BC-fade-out="0"/>
+	<Cut A="01" A-ending="loop" A-fade-out="1" B="b1" C="c1" BC-ending="loop" BC-fade-out="1"/>
+	<Cut A="05" A-ending="stop" A-fade-out="0" B="b3" C="c3" BC-ending="stop" BC-fade-out="0"/>
+	<Cut A="01" A-ending="na" A-fade-out="0" B="b6" C="c6" BC-ending="loop" BC-fade-out="0"/>
+	<Cut A="01" A-ending="na" A-fade-out="0" B="b5" C="c5" BC-ending="loop" BC-fade-out="0"/>
+	<Cut A="01" A-ending="na" A-fade-out="0" B="b6" C="c6" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="01" A-ending="loop" A-fade-out="0" B="b6" C="c6" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="06" A-ending="stop" A-fade-out="0" B="b6" C="c6" BC-ending="loop" BC-clear="0" BC-fade-out="0"/>
+	<Cut A="x1" A-ending="loop" A-fade-out="0" B="b4" C="c4" BC-ending="loop" BC-fade-out="0"/>
+
+	<Cut A="x1" A-ending="loop" A-fade-out="0" B="b2" C="c2" BC-ending="loop" BC-fade-out="0"/>
+
+	<Cut A="x1" A-ending="stop" A-fade-out="1" B="b1" C="c1" BC-ending="loop" BC-fade-out="0"/>
+</Schedule>

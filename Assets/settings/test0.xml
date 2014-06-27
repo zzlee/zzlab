@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<setting
+	title="Window 0" 
+	position="0,0" 
+	size="1366,768" 
+	style="wxCLIP_CHILDREN | wxBORDER_NONE"/>
